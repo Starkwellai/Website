@@ -347,27 +347,6 @@ export default function PrivacyTermsModals({
                 <strong>{t.modals.updates}:</strong> {t.modals.updatesDesc}
               </li>
             </ul>
-            <div className="h-px bg-white/10 my-6"></div>
-            <p className="text-xs opacity-75 mb-4">日本語</p>
-            <p className="mb-4">{t.modals.privacyJapaneseText1}</p>
-            <p className="mb-4">{t.modals.privacyJapaneseText2}</p>
-            <ul className="list-disc list-inside space-y-2 mb-4">
-              <li>
-                <strong>{t.modals.dataCategories}:</strong>{' '}
-                {t.modals.dataCategoriesDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.yourRights}:</strong>{' '}
-                {t.modals.yourRightsDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.dataSecurity}:</strong>{' '}
-                {t.modals.dataSecurityDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.updates}:</strong> {t.modals.updatesDescJa}
-              </li>
-            </ul>
             <p className="text-gray-400 text-sm mt-6 mb-4">
               {t.modals.disagreeMessage}
             </p>
@@ -409,30 +388,6 @@ export default function PrivacyTermsModals({
               <li>
                 <strong>{t.modals.governingLaw}:</strong>{' '}
                 {t.modals.governingLawDesc}
-              </li>
-            </ul>
-            <div className="h-px bg-white/10 my-6"></div>
-            <p className="text-xs opacity-75 mb-4">日本語</p>
-            <p className="mb-4">{t.modals.termsJapaneseText1}</p>
-            <ul className="list-disc list-inside space-y-2 mb-4">
-              <li>
-                <strong>{t.modals.acceptableUse}:</strong>{' '}
-                {t.modals.acceptableUseDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.contentOwnership}:</strong>{' '}
-                {t.modals.contentOwnershipDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.limitationOfLiability}:</strong>{' '}
-                {t.modals.limitationOfLiabilityDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.changes}:</strong> {t.modals.changesDescJa}
-              </li>
-              <li>
-                <strong>{t.modals.governingLaw}:</strong>{' '}
-                {t.modals.governingLawDescJa}
               </li>
             </ul>
             <p className="text-gray-400 text-sm mt-6 mb-4">

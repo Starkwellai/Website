@@ -19,6 +19,13 @@ export default function AISearchTool() {
   const [preferences, setPreferences] = useState<string[]>([])
   const [insuranceCardFile, setInsuranceCardFile] = useState<File | null>(null)
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
+  const [hipaaObligations, setHipaaObligations] = useState({
+    obligation1: false,
+    obligation2: false,
+    obligation3: false,
+    obligation4: false,
+    obligation5: false,
+  })
   const [agreementsStatus, setAgreementsStatus] = useState<{
     privacyAccepted: boolean
     termsAccepted: boolean
@@ -55,12 +62,20 @@ export default function AISearchTool() {
         const ppAccepted = localStorage.getItem(PP_KEY)
         const touAccepted = localStorage.getItem(TOU_KEY)
         
+        const privacyAccepted = !!ppAccepted
+        const termsAccepted = !!touAccepted
+        
         setAgreementsStatus({
-          privacyAccepted: !!ppAccepted,
-          termsAccepted: !!touAccepted,
+          privacyAccepted,
+          termsAccepted,
           privacyDate: ppAccepted,
           termsDate: touAccepted,
         })
+
+        // プライバシーポリシーと利用規約の両方が承諾されたら、Disclaimerを自動的にチェック
+        if (privacyAccepted && termsAccepted) {
+          setDisclaimerAccepted(true)
+        }
       } catch {}
     }
 
@@ -69,6 +84,9 @@ export default function AISearchTool() {
     
     // 定期的にチェック（同じタブ内での変更も検知）
     const interval = setInterval(handleStorageChange, 500)
+    
+    // 初回チェック
+    handleStorageChange()
     
     return () => {
       window.removeEventListener('storage', handleStorageChange)
@@ -99,7 +117,17 @@ export default function AISearchTool() {
     }
   }
 
-  const canProceedToStep2 = (selectedPlan !== null || insuranceCardFile !== null) && disclaimerAccepted
+  const allHipaaObligationsAccepted = 
+    hipaaObligations.obligation1 &&
+    hipaaObligations.obligation2 &&
+    hipaaObligations.obligation3 &&
+    hipaaObligations.obligation4 &&
+    hipaaObligations.obligation5
+
+  const canProceedToStep2 = 
+    (selectedPlan !== null || insuranceCardFile !== null) && 
+    disclaimerAccepted && 
+    allHipaaObligationsAccepted
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return ''
@@ -128,38 +156,8 @@ export default function AISearchTool() {
             {t.search.searchToolDescription}
           </p>
 
-          {/* 同意状態の表示 */}
-          {(agreementsStatus.privacyAccepted || agreementsStatus.termsAccepted) && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-green-800 mb-2">
-                    {t.search.agreementsAccepted || 'Agreements Accepted / 同意済み'}
-                  </h3>
-                  <div className="space-y-1 text-sm text-green-700">
-                    {agreementsStatus.privacyAccepted && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">✓ Privacy Policy:</span>
-                        <span>{formatDate(agreementsStatus.privacyDate)}</span>
-                      </div>
-                    )}
-                    {agreementsStatus.termsAccepted && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">✓ Terms of Use:</span>
-                        <span>{formatDate(agreementsStatus.termsDate)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-green-600 mt-2">
-                    {t.search.agreementsNote || 'You can now use the search tool. / 検索ツールをご利用いただけます。'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* 同意状態の表示 - 非表示（履歴はlocalStorageに保持） */}
+          {/* 同意状態はlocalStorageに保存されているが、UIには表示しない */}
           
           <div className="bg-white rounded-lg shadow-lg p-8">
             {/* Step Indicator */}
@@ -277,6 +275,73 @@ export default function AISearchTool() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </button>
+                  </div>
+                </div>
+
+                {/* HIPAA Obligations */}
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mt-6">
+                  <h3 className="text-lg font-bold text-purple-900 mb-2">
+                    {t.search.hipaaTitle}
+                  </h3>
+                  <p className="text-sm text-purple-800 mb-4">
+                    {t.search.hipaaDescription}
+                  </p>
+                  <div className="space-y-3">
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hipaaObligations.obligation1}
+                        onChange={(e) => setHipaaObligations(prev => ({ ...prev, obligation1: e.target.checked }))}
+                        className="mt-1 mr-3 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {t.search.hipaaObligation1}
+                      </span>
+                    </label>
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hipaaObligations.obligation2}
+                        onChange={(e) => setHipaaObligations(prev => ({ ...prev, obligation2: e.target.checked }))}
+                        className="mt-1 mr-3 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {t.search.hipaaObligation2}
+                      </span>
+                    </label>
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hipaaObligations.obligation3}
+                        onChange={(e) => setHipaaObligations(prev => ({ ...prev, obligation3: e.target.checked }))}
+                        className="mt-1 mr-3 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {t.search.hipaaObligation3}
+                      </span>
+                    </label>
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hipaaObligations.obligation4}
+                        onChange={(e) => setHipaaObligations(prev => ({ ...prev, obligation4: e.target.checked }))}
+                        className="mt-1 mr-3 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {t.search.hipaaObligation4}
+                      </span>
+                    </label>
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hipaaObligations.obligation5}
+                        onChange={(e) => setHipaaObligations(prev => ({ ...prev, obligation5: e.target.checked }))}
+                        className="mt-1 mr-3 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {t.search.hipaaObligation5}
+                      </span>
+                    </label>
                   </div>
                 </div>
 

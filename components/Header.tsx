@@ -1,19 +1,37 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
+import { useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useLocale } from '@/contexts/LocaleContext'
 
 export default function Header() {
   const { t } = useTranslation()
   const { locale, setLocale } = useLocale()
+  const [logoError, setLogoError] = useState(false)
 
   return (
     <header className="bg-primary text-white">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold">
-            Starkwell
+          <Link href="/" className="flex items-center gap-2">
+            {logoError ? (
+              <span className="text-2xl font-bold">Starkwell</span>
+            ) : (
+              <>
+                <Image
+                  src="/logo.png"
+                  alt="Starkwell Logo"
+                  width={120}
+                  height={40}
+                  className="h-8 w-auto object-contain"
+                  onError={() => setLogoError(true)}
+                  priority
+                />
+                <span className="text-2xl font-bold sr-only">Starkwell</span>
+              </>
+            )}
           </Link>
           <div className="flex items-center space-x-4">
             <nav className="hidden md:flex items-center space-x-6">
