@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Shield, Lock, CheckCircle, FileCheck, Building2, Eye, Mail } from "lucide-react";
+import { Shield, Lock, CheckCircle, BadgeCheck, ListFilter, ClipboardList, Mail } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
@@ -107,26 +107,34 @@ export function Trust() {
         </div>
       </section>
 
-      {/* Provider Vetting Section */}
+      {/* Data Integrity Section */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-6">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">
-              Every provider is verified
+            <h2 className="text-3xl font-bold text-gray-900 mb-4 text-center">
+              We don&rsquo;t make the data look cleaner than it is
             </h2>
+            <p className="text-gray-600 text-center max-w-2xl mx-auto mb-12">
+              Providers aren&rsquo;t &ldquo;listed&rdquo; on Starkwell — every one comes from a
+              federal registry or an insurer&rsquo;s own published rate filing. Here&rsquo;s
+              what we actually check, and what we show you instead of hiding.
+            </p>
 
             <div className="grid md:grid-cols-3 gap-8">
               {/* Card 1 */}
               <Card className="bg-white border-2 border-gray-200">
                 <CardHeader className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FileCheck className="size-8 text-blue-600" />
+                    <BadgeCheck className="size-8 text-blue-600" />
                   </div>
-                  <CardTitle className="text-xl">License Verification</CardTitle>
+                  <CardTitle className="text-xl">Active NPI Verification</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-gray-600">
-                    We confirm active medical licenses with state boards before any provider can list on Starkwell.
+                    Every provider is checked against NPPES, the federal registry that issues
+                    National Provider Identifiers. Deactivated NPIs are automatically excluded —
+                    we don&rsquo;t independently verify state license or malpractice-insurance
+                    status, since neither is part of that federal record.
                   </p>
                 </CardContent>
               </Card>
@@ -135,13 +143,16 @@ export function Trust() {
               <Card className="bg-white border-2 border-gray-200">
                 <CardHeader className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Building2 className="size-8 text-purple-600" />
+                    <ListFilter className="size-8 text-purple-600" />
                   </div>
-                  <CardTitle className="text-xl">Insurance Check</CardTitle>
+                  <CardTitle className="text-xl">Evidence-Based Matching</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-gray-600">
-                    Providers must carry valid malpractice insurance to protect both patients and practitioners.
+                    Insurers publish a negotiated rate for everyone in network — including
+                    providers who never perform a given service. We check each price against real
+                    procedure and specialty history before showing it, and label what we couldn&rsquo;t
+                    confirm instead of hiding the gap.
                   </p>
                 </CardContent>
               </Card>
@@ -150,13 +161,15 @@ export function Trust() {
               <Card className="bg-white border-2 border-gray-200">
                 <CardHeader className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Eye className="size-8 text-green-600" />
+                    <ClipboardList className="size-8 text-green-600" />
                   </div>
-                  <CardTitle className="text-xl">Ongoing Monitoring</CardTitle>
+                  <CardTitle className="text-xl">Real Quality Data, Not Reviews</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-gray-600">
-                    Ratings and reviews are monitored continuously to ensure quality and patient safety.
+                    Hospital quality scores come from CMS&rsquo;s own patient-experience and safety
+                    surveys — the same federal data hospitals are required to report — not a star
+                    rating anyone could game.
                   </p>
                 </CardContent>
               </Card>
