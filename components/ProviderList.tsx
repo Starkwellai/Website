@@ -8,6 +8,8 @@ interface Provider {
   location: string
   service: string
   price: number
+  insuredPrice?: number
+  cashPrice?: number
   rating: number
 }
 
@@ -67,7 +69,24 @@ export default function ProviderList({ service, location }: ProviderListProps) {
           <p className="text-gray-500 mb-4">{provider.location}</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-primary">¥{provider.price.toLocaleString()}</p>
+              {provider.insuredPrice !== undefined || provider.cashPrice !== undefined ? (
+                <div className="space-y-1">
+                  {(provider.insuredPrice ?? provider.price) !== undefined && (
+                    <p className="text-xl font-bold text-primary">
+                      ${ (provider.insuredPrice ?? provider.price).toLocaleString() }
+                      <span className="ml-2 text-xs text-gray-500">(With Insurance)</span>
+                    </p>
+                  )}
+                  {provider.cashPrice !== undefined && (
+                    <p className="text-xl font-bold text-gray-800">
+                      ${provider.cashPrice.toLocaleString()}
+                      <span className="ml-2 text-xs text-gray-500">(Self-Pay)</span>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-2xl font-bold text-primary">${provider.price.toLocaleString()}</p>
+              )}
               <div className="flex items-center mt-1">
                 <span className="text-yellow-500">★</span>
                 <span className="ml-1 text-gray-600">{provider.rating}</span>

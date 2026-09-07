@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { SWRProvider } from '@/lib/swr-provider'
 import { LocaleProvider } from '@/contexts/LocaleContext'
+import { ReCaptchaProvider } from '@/components/ReCaptchaProvider'
+import PrivacyTermsModals from '@/components/PrivacyTermsModals'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,11 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <LocaleProvider>
-          <SWRProvider>
-            {children}
-          </SWRProvider>
-        </LocaleProvider>
+        <ReCaptchaProvider>
+          <LocaleProvider>
+            <SWRProvider>
+              <PrivacyTermsModals autoShow={true} />
+              {children}
+            </SWRProvider>
+          </LocaleProvider>
+        </ReCaptchaProvider>
       </body>
     </html>
   )

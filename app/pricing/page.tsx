@@ -167,12 +167,14 @@ export default function PricingPage() {
                     </div>
                   )}
                   <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                  <div className="mb-6">
-                    <span className="text-4xl font-bold text-primary">{plan.price}</span>
-                    {plan.period && (
-                      <span className="text-gray-600 ml-2">{plan.period}</span>
-                    )}
-                  </div>
+                  {(planCategory.category === 'consumers') && (
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold text-primary">{plan.price}</span>
+                      {plan.period && (
+                        <span className="text-gray-600 ml-2">{plan.period}</span>
+                      )}
+                    </div>
+                  )}
                   <ul className="space-y-3 mb-8">
                     {plan.features.map((feature, featureIndex) => (
                       <li key={featureIndex} className="flex items-start">
@@ -192,16 +194,16 @@ export default function PricingPage() {
                     ))}
                   </ul>
                   <Link
-                    href={planCategory.category === 'insurance' ? '/contact' : '/signup'}
+                    href={planCategory.category === 'consumers' ? '/signup' : '/contact'}
                     className={`block w-full text-center py-3 rounded-lg font-semibold transition-colors ${
                       plan.popular
                         ? 'bg-primary text-white hover:bg-primary-dark'
-                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        : 'bg-primary text-white hover:bg-primary-dark'
                     }`}
                   >
-                    {planCategory.category === 'insurance'
-                      ? t.pricing.contactSales
-                      : t.pricing.getStarted}
+                    {planCategory.category === 'consumers'
+                      ? t.pricing.getStarted
+                      : t.pricing.contactSales}
                   </Link>
                 </div>
               ))}
@@ -210,7 +212,7 @@ export default function PricingPage() {
         ))}
 
         {/* Additional Information */}
-        <div className="max-w-4xl mx-auto mt-16 bg-blue-50 rounded-lg p-8">
+        <div className="max-w-4xl mx-auto mt-16 bg-primary-50 rounded-lg p-8">
           <h3 className="text-2xl font-bold mb-4 text-center">{t.pricing.whyChoose}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">

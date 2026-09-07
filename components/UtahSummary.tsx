@@ -36,7 +36,7 @@ export default function UtahSummary() {
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               {t.utah.summary}
             </h2>
-            <p className="text-xl text-blue-100">
+            <p className="text-xl text-primary-100">
               {t.utah.summaryTitle}
             </p>
           </div>
@@ -51,7 +51,7 @@ export default function UtahSummary() {
                   <div className="text-4xl flex-shrink-0">{point.icon}</div>
                   <div className="flex-1">
                     <h3 className="text-xl font-bold mb-2">{point.question}</h3>
-                    <p className="text-blue-100 leading-relaxed">{point.answer}</p>
+                    <p className="text-primary-100 leading-relaxed">{point.answer}</p>
                   </div>
                 </div>
               </div>

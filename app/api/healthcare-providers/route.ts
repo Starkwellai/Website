@@ -1,32 +1,51 @@
 import { NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
 
-// サンプルデータ - 実際の実装ではデータベースから取得
-const sampleProviders = [
-  {
-    id: 1,
-    name: 'Tokyo General Hospital',
-    location: 'Tokyo',
-    service: 'Colonoscopy',
-    price: 50000,
-    rating: 4.5,
-  },
-  {
-    id: 2,
-    name: 'Metropolitan Medical Center',
-    location: 'Tokyo',
-    service: 'Colonoscopy',
-    price: 45000,
-    rating: 4.8,
-  },
-  {
-    id: 3,
-    name: 'City Health Clinic',
-    location: 'Tokyo',
-    service: 'Colonoscopy',
-    price: 48000,
-    rating: 4.2,
-  },
-]
+interface ProviderRecord {
+  id: number
+  name: string
+  location: {
+    address: string
+    city: string
+    state: string
+    zip: string
+    latitude?: number
+    longitude?: number
+  }
+  rating: number
+  inNetwork?: boolean
+  acceptedPlans?: string[]
+  services: Array<{
+    codeType: 'CPT' | 'HCPCS' | 'OTHER'
+    code: string
+    name: string
+  }>
+  prices: {
+    insuredPrice?: number
+    cashPrice?: number
+    currency?: string
+  }
+  waitTimeMin?: number
+}
+
+interface ProviderResponseItem {
+  id: number
+  name: string
+  location: string
+  service: string
+  price: number
+  insuredPrice?: number
+  cashPrice?: number
+  rating: number
+}
+
+const scrapedPath = path.join(process.cwd(), 'data', 'utah-providers.scraped.json')
+const fallbackPath = path.join(process.cwd(), 'data', 'utah-providers.json')
+
+const sampleProviders: ProviderRecord[] = fs.existsSync(scrapedPath)
+  ? JSON.parse(fs.readFileSync(scrapedPath, 'utf8'))
+  : JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -37,23 +56,48 @@ export async function GET(request: Request) {
   let filteredProviders = sampleProviders
 
   if (service) {
-    filteredProviders = filteredProviders.filter(p => 
-      p.service.toLowerCase().includes(service.toLowerCase())
-    )
+    filteredProviders = filteredProviders.filter(p => {
+      const normalized = service.toLowerCase()
+      return p.services.some(svc =>
+        svc.name.toLowerCase().includes(normalized) ||
+        svc.code.toLowerCase().includes(normalized)
+      )
+    })
   }
 
   if (location) {
-    filteredProviders = filteredProviders.filter(p => 
-      p.location.toLowerCase().includes(location.toLowerCase())
+    const normalized = location.toLowerCase()
+    filteredProviders = filteredProviders.filter(p =>
+      p.location.city.toLowerCase().includes(normalized) ||
+      p.location.zip.toLowerCase().includes(normalized) ||
+      p.location.address.toLowerCase().includes(normalized)
     )
   }
 
   // シミュレートされた遅延（実際のAPI呼び出しを模擬）
   await new Promise(resolve => setTimeout(resolve, 500))
 
+  const responseProviders: ProviderResponseItem[] = filteredProviders.map(provider => {
+    const primaryService = provider.services[0]
+    const insuredPrice = provider.prices?.insuredPrice
+    const cashPrice = provider.prices?.cashPrice
+    const price = insuredPrice ?? cashPrice ?? 0
+
+    return {
+      id: provider.id,
+      name: provider.name,
+      location: `${provider.location.city}, ${provider.location.state} ${provider.location.zip}`,
+      service: primaryService?.name || 'General Care',
+      price,
+      insuredPrice,
+      cashPrice,
+      rating: provider.rating,
+    }
+  })
+
   return NextResponse.json({
-    providers: filteredProviders,
-    count: filteredProviders.length,
+    providers: responseProviders,
+    count: responseProviders.length,
   })
 }
 

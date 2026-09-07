@@ -31,7 +31,7 @@ export default function PrivacyNoticePage() {
               <section>
                 <h2 className="text-2xl font-bold mb-4">{t.privacyNotice.mainNotice}</h2>
                 <div className="space-y-4">
-                  <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+                  <div className="bg-primary-50 border-l-4 border-primary-500 p-4">
                     <p className="text-gray-800 mb-2">{t.privacyNotice.japaneseText}</p>
                   </div>
                   <div className="bg-gray-50 border-l-4 border-gray-400 p-4">

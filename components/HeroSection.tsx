@@ -15,10 +15,10 @@ export default function HeroSection() {
           <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
             {t.hero.catchCopy1}
           </h1>
-          <p className="text-lg md:text-xl mb-4 text-blue-100 leading-relaxed">
+          <p className="text-lg md:text-xl mb-4 text-primary-100 leading-relaxed">
             {t.hero.catchCopy2}
           </p>
-          <p className="text-base md:text-lg mb-8 text-blue-200 leading-relaxed">
+          <p className="text-base md:text-lg mb-8 text-primary-200 leading-relaxed">
             {t.hero.description}
           </p>
           <div className="flex flex-col sm:flex-row gap-4">

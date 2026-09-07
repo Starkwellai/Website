@@ -70,7 +70,7 @@ export default function PlatformSection() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
               <div>
                 <h3 className="text-3xl font-bold mb-4">{t.platformPage.analyticsTitle}</h3>
-                <p className="text-lg mb-6 text-blue-100">
+                <p className="text-lg mb-6 text-primary-100">
                   {t.platformPage.analyticsDesc}
                 </p>
                 <ul className="space-y-3 mb-6">

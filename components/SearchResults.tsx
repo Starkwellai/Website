@@ -10,6 +10,8 @@ interface SearchResult {
   rating: number
   service_name: string
   price: number
+  insuredPrice?: number
+  cashPrice?: number
   distance?: number
   waitTime?: number
   inNetwork?: boolean
@@ -66,10 +68,29 @@ export default function SearchResults({ results }: SearchResultsProps) {
               <div className="mb-4">
                 <p className="text-lg font-semibold text-gray-800 mb-2">{result.service_name}</p>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <span className="font-semibold text-primary text-lg">${result.price}</span>
-                    <span className="text-xs">({t.searchResults.estimatedCost})</span>
-                  </span>
+                  {result.insuredPrice !== undefined || result.cashPrice !== undefined ? (
+                    <div className="flex flex-col gap-1">
+                      {(result.insuredPrice ?? result.price) !== undefined && (
+                        <span className="flex items-center gap-1">
+                          <span className="font-semibold text-primary text-lg">
+                            ${result.insuredPrice ?? result.price}
+                          </span>
+                          <span className="text-xs">({t.searchResults.withInsurance})</span>
+                        </span>
+                      )}
+                      {result.cashPrice !== undefined && (
+                        <span className="flex items-center gap-1">
+                          <span className="font-semibold text-gray-800 text-lg">${result.cashPrice}</span>
+                          <span className="text-xs">({t.searchResults.selfPay})</span>
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-primary text-lg">${result.price}</span>
+                      <span className="text-xs">({t.searchResults.estimatedCost})</span>
+                    </span>
+                  )}
                   {result.distance && (
                     <span className="flex items-center gap-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +124,7 @@ export default function SearchResults({ results }: SearchResultsProps) {
               {(result.costScore || result.convenienceScore || result.qualityScore) && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   {result.costScore !== undefined && (
-                    <div className="bg-blue-50 p-2 rounded">
+                    <div className="bg-primary-50 p-2 rounded">
                       <p className="text-xs text-gray-600">{t.searchResults.costScore}</p>
                       <p className="text-lg font-bold text-primary">{result.costScore}/10</p>
                     </div>
@@ -137,9 +158,6 @@ export default function SearchResults({ results }: SearchResultsProps) {
               >
                 {t.searchResults.viewDetails}
               </Link>
-              <button className="btn-secondary text-center">
-                {t.searchResults.bookNow}
-              </button>
             </div>
           </div>
         </div>

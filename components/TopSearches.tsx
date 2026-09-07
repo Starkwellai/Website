@@ -86,7 +86,7 @@ export default function TopSearches() {
             <Link
               key={item.rank}
               href={`/search?service=${encodeURIComponent(item.title)}`}
-              className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6 hover:shadow-lg transition-all hover:scale-105"
+              className="bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200 rounded-lg p-6 hover:shadow-lg transition-all hover:scale-105"
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">

@@ -192,7 +192,7 @@ export default function InsurancePlanSelector({ selectedPlan, onPlanSelect }: In
 
       {/* Plan Details */}
       {selectedPlanData && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+        <div className="bg-primary-50 p-4 rounded-lg border border-primary-200">
           <h4 className="font-semibold mb-3">{t.utah.planDetails}</h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>

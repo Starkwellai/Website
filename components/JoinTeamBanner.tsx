@@ -15,7 +15,7 @@ export default function JoinTeamBanner() {
           </div>
           <div>
             <h2 className="text-3xl md:text-4xl font-bold mb-4">{t.joinTeam.title}</h2>
-            <p className="text-lg mb-6 text-blue-100">
+            <p className="text-lg mb-6 text-primary-100">
               {t.joinTeam.description}
             </p>
             <Link href="/careers" className="btn-secondary inline-block">

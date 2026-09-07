@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "name": "Intermountain InstaCare – Sugar House",
+    "location": {
+      "address": "1138 E 2100 S",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "zip": "84105",
+      "latitude": 40.7256,
+      "longitude": -111.8629
+    },
+    "rating": 4.6,
+    "inNetwork": true,
+    "acceptedPlans": ["selecthealth-value-plus", "selecthealth-select-plus", "regence-blue-options"],
+    "services": [
+      { "codeType": "CPT", "code": "99213", "name": "Urgent Care Visit (Level 3)" }
+    ],
+    "prices": {
+      "insuredPrice": 30,
+      "cashPrice": 85,
+      "currency": "USD"
+    },
+    "waitTimeMin": 15
+  },
+  {
+    "id": 2,
+    "name": "University of Utah Health Community Clinic",
+    "location": {
+      "address": "729 Arapeen Dr",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "zip": "84108",
+      "latitude": 40.7647,
+      "longitude": -111.8291
+    },
+    "rating": 4.7,
+    "inNetwork": true,
+    "acceptedPlans": ["university-basic", "university-plus", "selecthealth-value-plus"],
+    "services": [
+      { "codeType": "CPT", "code": "99213", "name": "Primary Care Visit (Level 3)" }
+    ],
+    "prices": {
+      "insuredPrice": 40,
+      "cashPrice": 110,
+      "currency": "USD"
+    },
+    "waitTimeMin": 5
+  },
+  {
+    "id": 3,
+    "name": "Foothill Family Clinic",
+    "location": {
+      "address": "1320 E 2100 S",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "zip": "84109",
+      "latitude": 40.7252,
+      "longitude": -111.8566
+    },
+    "rating": 4.8,
+    "inNetwork": true,
+    "acceptedPlans": ["regence-blue-preferred", "molina-complete-care"],
+    "services": [
+      { "codeType": "CPT", "code": "99214", "name": "Primary Care Visit (Level 4)" }
+    ],
+    "prices": {
+      "insuredPrice": 50,
+      "cashPrice": 125,
+      "currency": "USD"
+    },
+    "waitTimeMin": 20
+  }
+]

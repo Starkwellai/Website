@@ -49,7 +49,7 @@ export default function UtahGuidePage() {
             <h2 className="text-3xl font-bold mb-4">{t.utah.majorInsurers}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {insurers.map((insurer, index) => (
-                <div key={index} className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                <div key={index} className="bg-primary-50 p-6 rounded-lg border border-primary-200">
                   <h3 className="text-xl font-bold text-primary mb-2">{insurer.name}</h3>
                   <p className="text-gray-700 text-sm">{insurer.description}</p>
                 </div>
@@ -88,7 +88,7 @@ export default function UtahGuidePage() {
           {/* In-Network */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-4">{t.utah.inNetwork}</h2>
-            <div className="bg-blue-50 p-6 rounded-lg">
+            <div className="bg-primary-50 p-6 rounded-lg">
               <p className="text-lg text-gray-700">{t.utah.inNetworkDesc}</p>
             </div>
           </section>

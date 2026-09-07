@@ -84,7 +84,7 @@ export default function ResourcesPage() {
             {resources.map((resource, index) => (
               <div key={index} className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
                 <div className="mb-3">
-                  <span className="text-xs font-semibold text-primary bg-blue-50 px-3 py-1 rounded-full">
+                  <span className="text-xs font-semibold text-primary bg-primary-50 px-3 py-1 rounded-full">
                     {resource.category}
                   </span>
                 </div>

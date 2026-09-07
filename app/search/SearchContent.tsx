@@ -38,6 +38,8 @@ export default function SearchContent() {
         rating: 4.6,
         service_name: service || 'Urgent Care',
         price: 30,
+        insuredPrice: 30,
+        cashPrice: 85,
         distance: 3.2,
         waitTime: 15,
         inNetwork: true,
@@ -54,6 +56,8 @@ export default function SearchContent() {
         rating: 4.7,
         service_name: service || 'Primary Care',
         price: 40,
+        insuredPrice: 40,
+        cashPrice: 110,
         distance: 2.1,
         waitTime: 5,
         inNetwork: true,
@@ -70,6 +74,8 @@ export default function SearchContent() {
         rating: 4.8,
         service_name: service || 'Primary Care',
         price: 50,
+        insuredPrice: 50,
+        cashPrice: 125,
         distance: 4.5,
         waitTime: 20,
         inNetwork: true,
@@ -86,6 +92,8 @@ export default function SearchContent() {
         rating: 4.5,
         service_name: service || 'Primary Care',
         price: 25,
+        insuredPrice: 25,
+        cashPrice: 95,
         distance: 1.8,
         waitTime: 10,
         inNetwork: true,
@@ -102,6 +110,8 @@ export default function SearchContent() {
         rating: 4.4,
         service_name: service || 'Urgent Care',
         price: 45,
+        insuredPrice: 45,
+        cashPrice: 120,
         distance: 2.5,
         waitTime: 12,
         inNetwork: true,
@@ -134,7 +144,7 @@ export default function SearchContent() {
         </h1>
         
         {selectedPlan && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-700">
               <strong>{t.utah.inNetworkClinics}:</strong> {t.utah.findClinics}
             </p>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import Link from 'next/link'
@@ -10,6 +11,7 @@ type UserType = 'consumer' | 'professional'
 
 export default function SignUpPage() {
   const { t } = useTranslation()
+  const { executeRecaptcha } = useGoogleReCaptcha()
   const [userType, setUserType] = useState<UserType>('consumer')
   const [formData, setFormData] = useState({
     name: '',
@@ -22,11 +24,32 @@ export default function SignUpPage() {
     position: '',
     purpose: '',
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle signup logic here
-    console.log('Sign up:', { userType, ...formData })
+    setIsSubmitting(true)
+    setSubmitStatus('idle')
+
+    try {
+      // Get reCAPTCHA token
+      let recaptchaToken = ''
+      if (executeRecaptcha) {
+        recaptchaToken = await executeRecaptcha('signup_form')
+      }
+
+      // Handle signup logic here
+      console.log('Sign up:', { userType, ...formData, recaptchaToken })
+      
+      // TODO: Implement API endpoint for signup
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setSubmitStatus('success')
+    } catch (error) {
+      setSubmitStatus('error')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -319,10 +342,23 @@ export default function SignUpPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full btn-primary mb-4"
+              disabled={isSubmitting}
+              className="w-full btn-primary mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {t.signupPage.createAccount}
+              {isSubmitting ? 'Creating Account...' : t.signupPage.createAccount}
             </button>
+
+            {submitStatus === 'success' && (
+              <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-4">
+                Account created successfully! Please check your email to verify your account.
+              </div>
+            )}
+
+            {submitStatus === 'error' && (
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-4">
+                There was an error creating your account. Please try again.
+              </div>
+            )}
 
             <p className="text-center text-sm text-gray-700">
               {t.signupPage.alreadyHaveAccount}{' '}
