@@ -224,6 +224,21 @@ class RewritePrefix:
 app.add_middleware(RewritePrefix, prefix="/serving", target="/api")
 
 
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Vite fingerprints every JS/CSS filename with a content hash, so a
+    file at an /assets/ URL never changes — safe to cache forever. This
+    covers only that half; the index.html half (same URL every deploy, new
+    content each time, so it must always be revalidated) is set at the
+    point index.html is actually returned — see the `spa` catch-all route
+    below, since React Router paths like /prices also resolve to that same
+    file and this path-based check alone can't see that."""
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
 def _build_system_view(con: duckdb.DuckDBPyConnection) -> None:
     """View `system_at` : address -> agreed health system, or absent.
 
@@ -1287,7 +1302,11 @@ if DIST.exists():
         candidate = DIST / full_path
         if candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(DIST / "index.html")
+        # index.html: always revalidate. Its URL never changes between
+        # deploys but its content (which JS/CSS bundle it points to) does,
+        # so caching it is what let a stale build linger after a deploy
+        # (observed in production 2026-09-10, fixed by this header).
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 if __name__ == "__main__":
