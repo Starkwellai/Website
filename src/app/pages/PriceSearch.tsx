@@ -6,6 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
+import { Skeleton } from "../components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
@@ -106,6 +107,56 @@ function FullRangeInfo({ note }: { note: string | null }) {
         {note}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Same visible "hover/tap for more" affordance as FullRangeInfo, for any
+ *  other jargon term on a result card. A `title` attribute alone (the
+ *  previous approach for the evidence badge) is real but easy to miss —
+ *  there's no visual cue it's there, and it doesn't work on touch at all. */
+function TermInfo({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={e => e.stopPropagation()}
+          aria-label="What this means"
+          className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-400 hover:text-gray-600 cursor-pointer"
+        >
+          <Info className="h-3 w-3" />
+        </span>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-72 text-sm text-gray-700"
+        onClick={e => e.stopPropagation()}
+      >
+        {text}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Placeholder cards shown while a layer's data is in flight, so the page
+ *  never goes blank between "clicked" and "results appeared". */
+function ResultCardSkeleton() {
+  return (
+    <Card className="bg-white">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+          <div className="shrink-0 space-y-2">
+            <Skeleton className="h-4 w-14" />
+            <Skeleton className="h-3 w-10" />
+          </div>
+        </div>
+        <Skeleton className="mt-3 h-3 w-2/3" />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -433,7 +484,7 @@ export function PriceSearch() {
                 disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 h-14 px-8 text-base"
               >
-                Search
+                {loading ? "Searching…" : "Search"}
               </Button>
             </form>
           </CardContent>
@@ -679,6 +730,11 @@ export function PriceSearch() {
                     </Card>
                   </button>
                 ))}
+                {loading && services.length === 0 && (
+                  <>
+                    {Array.from({ length: 6 }).map((_, i) => <ResultCardSkeleton key={i} />)}
+                  </>
+                )}
                 {!loading && services.length === 0 && !error && (
                   <p className="text-gray-500">No procedures matched “{query}”.</p>
                 )}
@@ -976,6 +1032,11 @@ export function PriceSearch() {
                       </div>
                     )}
 
+                    {!facility && loading && facilities.length === 0 && (
+                      <>
+                        {Array.from({ length: 5 }).map((_, i) => <ResultCardSkeleton key={i} />)}
+                      </>
+                    )}
                     {!facility && !loading && facilities.length === 0 && !error && (
                       <p className="text-gray-500">
                         No locations{city ? ` in ${city}` : ""} for this procedure.
@@ -1033,18 +1094,24 @@ export function PriceSearch() {
                                 >
                                   {EVIDENCE_SHORT[p.evidence]}
                                 </Badge>
+                                <TermInfo text={EVIDENCE_LABEL[p.evidence]} />
                                 <Badge variant="outline" className="bg-white text-gray-600">
                                   {p.n_payers} {p.n_payers === 1 ? "plan" : "plans"}
                                 </Badge>
                                 {p.component && p.component !== "global" && (
-                                  <Badge
-                                    variant="outline"
-                                    className="bg-amber-50 text-amber-700 border-amber-200"
-                                  >
-                                    {p.component === "professional"
-                                      ? "interpretation fee only"
-                                      : p.component}
-                                  </Badge>
+                                  <>
+                                    <Badge
+                                      variant="outline"
+                                      className="bg-amber-50 text-amber-700 border-amber-200"
+                                    >
+                                      {p.component === "professional"
+                                        ? "interpretation fee only"
+                                        : p.component}
+                                    </Badge>
+                                    {p.component === "professional" && (
+                                      <TermInfo text="This is the physician's fee for interpreting the result — not the hospital or imaging center's charge for actually performing the test. You'll likely see a separate facility charge for the same visit." />
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1053,8 +1120,9 @@ export function PriceSearch() {
                                 {formatPrice(p.median_rate)}
                               </p>
                               {p.pct_of_medicare != null && (
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-gray-500 flex items-center justify-end">
                                   {Math.round(p.pct_of_medicare)}% of Medicare
+                                  <TermInfo text="How this price compares to what Medicare pays for the same service. 100% means the same as Medicare; 250% means about 2.5 times what Medicare would pay." />
                                 </p>
                               )}
                             </div>
@@ -1063,6 +1131,11 @@ export function PriceSearch() {
                       </Card>
                       );
                     })}
+                    {facility && loading && providers.length === 0 && (
+                      <>
+                        {Array.from({ length: 5 }).map((_, i) => <ResultCardSkeleton key={i} />)}
+                      </>
+                    )}
                     {facility && !loading && providers.length === 0 && !error && (
                       <p className="text-gray-500">No providers match these filters here.</p>
                     )}
