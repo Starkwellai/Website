@@ -389,6 +389,31 @@ export async function searchServices(
   return r.results;
 }
 
+/** Fallback for when searchServices() above already came back empty. Sends
+ *  a free-text description to the AI-matching endpoint, which only ever
+ *  returns real, priced catalog entries — never raw model text — so the
+ *  result here is a Service[] exactly like searchServices(), safe to render
+ *  with the same cards. `enabled: false` means no API key is configured on
+ *  the server; `error` is set (results empty) if the AI call itself failed —
+ *  both are normal, expected outcomes to show a plain message for, not
+ *  something to throw on. */
+export async function aiSearchServices(description: string): Promise<{
+  results: Service[];
+  enabled: boolean;
+  error: string | null;
+}> {
+  const res = await fetch(`${BASE}/services/ai-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: description }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail.slice(0, 160)}` : ""}`);
+  }
+  return res.json();
+}
+
 export async function listCategories(): Promise<Category[]> {
   const r = await get<{ categories: Category[] }>("/categories");
   return r.categories;

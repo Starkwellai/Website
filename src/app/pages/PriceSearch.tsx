@@ -7,6 +7,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
 import { Skeleton } from "../components/ui/skeleton";
+import { Textarea } from "../components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
@@ -19,7 +20,7 @@ import { ProviderMap, type MapPoint } from "../components/ProviderMap";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
-  searchServices, getFacilities, getProviders, listCategories, listPlans,
+  searchServices, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
   getCashPrices, getFacilityQuality, formatPrice, isPreciseLocation, facilityLabel, isHSA,
   EVIDENCE_LABEL, SORT_LABEL,
   type Service, type Facility, type ProviderPrice, type Evidence,
@@ -242,6 +243,16 @@ export function PriceSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fallback for when a normal keyword search (above) comes back with zero
+  // matches — lets the user describe their situation in plain language
+  // instead of the procedure's medical name. Reset whenever a fresh keyword
+  // search runs (see runSearch below), so switching queries doesn't leave a
+  // stale AI attempt on screen.
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTried, setAiTried] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   // Compare tray. Scoped to one layer at a time — comparing a hospital
   // against an individual physician isn't a like-for-like question, so
   // facilities and providers get separate, small (max 3) selections rather
@@ -334,6 +345,7 @@ export function PriceSearch() {
     setLoading(true); setError(null);
     setSelected(null); setFacility(null); setFacilities([]); setProviders([]);
     setCompareFacilities([]); setCompareProviders([]);
+    setAiQuery(""); setAiTried(false); setAiError(null);
     try {
       setServices(await searchServices(q, {
         category: cat === "all" ? undefined : cat, limit: 24,
@@ -343,6 +355,30 @@ export function PriceSearch() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
+  }
+
+  // Only reachable after a normal keyword search already rendered zero
+  // results (see the empty-results branch below) — never runs on the main
+  // search path, so a slow/unavailable AI call can't affect normal search.
+  async function runAiSearch() {
+    setAiLoading(true); setAiError(null);
+    try {
+      const r = await aiSearchServices(aiQuery);
+      if (!r.enabled) {
+        setAiError("AI search isn't turned on for this site yet — try the exact procedure name.");
+      } else if (r.error) {
+        setAiError("Couldn't reach the AI matcher just now — try the exact procedure name.");
+      } else if (r.results.length === 0) {
+        setAiError(null); // falls through to the generic "no matches" message
+      } else {
+        setServices(r.results);
+      }
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAiTried(true);
+      setAiLoading(false);
+    }
   }
 
   useEffect(() => { runSearch(query, category); /* eslint-disable-next-line */ }, [category, browseCategories, browseKeys]);
@@ -736,7 +772,42 @@ export function PriceSearch() {
                   </>
                 )}
                 {!loading && services.length === 0 && !error && (
-                  <p className="text-gray-500">No procedures matched “{query}”.</p>
+                  <div className="sm:col-span-2 space-y-3">
+                    <p className="text-gray-500">No procedures matched “{query}”.</p>
+                    {!aiTried && (
+                      <div className="space-y-2 max-w-lg">
+                        <p className="text-sm text-gray-600">
+                          Try describing what&rsquo;s going on instead:
+                        </p>
+                        <Textarea
+                          value={aiQuery}
+                          onChange={e => setAiQuery(e.target.value)}
+                          maxLength={300}
+                          placeholder="e.g. my knee hurts when I climb stairs"
+                          disabled={aiLoading}
+                        />
+                        <Button
+                          onClick={runAiSearch}
+                          disabled={aiLoading || aiQuery.trim().length < 3}
+                        >
+                          {aiLoading ? "Searching…" : "Find matching procedures"}
+                        </Button>
+                        <p className="text-xs text-gray-400">
+                          This description is sent to an AI service to help match it to a procedure.
+                        </p>
+                      </div>
+                    )}
+                    {aiLoading && (
+                      <div className="grid gap-3 sm:grid-cols-2 max-w-lg">
+                        {Array.from({ length: 3 }).map((_, i) => <ResultCardSkeleton key={i} />)}
+                      </div>
+                    )}
+                    {aiTried && !aiLoading && services.length === 0 && (
+                      <p className="text-gray-500">
+                        {aiError ?? "No matches found for that either — try the exact procedure name."}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

@@ -44,14 +44,17 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any, Optional
 
+import anthropic
 import duckdb
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 # Month directories mean this path never changes when a new month is published;
 # build_serving.py rewrites this file from whichever month is _COMPLETE.
@@ -114,6 +117,14 @@ PROVIDERS = Path(os.environ.get(
 # Medicine Physician"). Public, stable code set — not derived or inferred.
 TAXONOMY = Path(os.environ.get(
     "STARKWELL_TAXONOMY", "D:/Starkwell/data/reference/nucc_taxonomy_251.csv"))
+
+# Unlike every other STARKWELL_* var above, this is a secret, not a file path
+# — it must never be baked into the Docker image's ENV block (that would put
+# it in the image's layer history). It's injected at `docker run` time via
+# `--env-file`, from a file that lives only on the droplet. Empty by default,
+# which is what lets /api/services/ai-search degrade to "enabled": false
+# instead of crashing when nobody has configured a key yet.
+ANTHROPIC_API_KEY = os.environ.get("STARKWELL_ANTHROPIC_API_KEY", "")
 
 # Street-token canonicalisation, used ONLY to join slice addresses to CMS
 # facility names. The slice writes "4401 HARRISON BLVD", CMS writes "4401
@@ -197,7 +208,7 @@ app = FastAPI(title="Starkwell serving API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -575,6 +586,168 @@ def services(
         ORDER BY providers DESC
         LIMIT {int(limit)}
     """, params)}
+
+
+def _services_by_keys(keys: list[str]) -> dict[str, dict]:
+    """Same aggregation/shape as services() above, but keyed by service_key
+    and unordered — the caller decides ordering. Used by ai_search() to turn
+    a short list of AI-picked keys into real, priced result rows."""
+    if not keys:
+        return {}
+    rows = q(f"""
+        SELECT service_key,
+               any_value(display_name)      AS display_name,
+               any_value(category)          AS category,
+               count(DISTINCT npi)          AS providers,
+               median(median_rate)          AS typical_price,
+               quantile_cont(median_rate, 0.05) AS low_price,
+               quantile_cont(median_rate, 0.95) AS high_price,
+               min(median_rate)             AS low_price_full,
+               max(median_rate)             AS high_price_full
+        FROM prices
+        WHERE is_primary AND service_key IN ({','.join(['?'] * len(keys))})
+        GROUP BY service_key
+    """, keys)
+    return {r["service_key"]: r for r in rows}
+
+
+# ---- AI-assisted search (fallback only, never touches normal search) -----
+# Whole feature is off by default (ANTHROPIC_API_KEY empty) and fails soft —
+# every error path returns HTTP 200 with an empty result list, never a 5xx,
+# because a flaky third-party call must never make the site look broken.
+
+_catalog_cache: dict[str, Any] | None = None
+
+
+def _catalog() -> dict[str, Any]:
+    """Built once per process — the catalog only changes on redeploy. Returns
+    the prompt text (one line per real service) and the set of valid keys,
+    which is what every AI answer gets checked against before it can become
+    a result the user sees."""
+    global _catalog_cache
+    if _catalog_cache is None:
+        rows = q("""
+            SELECT service_key,
+                   any_value(display_name) AS display_name,
+                   any_value(category)     AS category
+            FROM prices WHERE is_primary
+            GROUP BY service_key ORDER BY service_key
+        """)
+        lines = [f"{r['service_key']} | {r['display_name']} | {r['category']}" for r in rows]
+        _catalog_cache = {"text": "\n".join(lines), "keys": {r["service_key"] for r in rows}}
+    return _catalog_cache
+
+
+_MATCH_TOOL = {
+    "name": "match_services",
+    "description": "Return the service_key values from the catalog that best match the patient's description, best match first.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "service_keys": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 5,
+                "description": "0 to 5 service_key values, copied EXACTLY from the catalog list. Empty if nothing plausibly matches.",
+            }
+        },
+        "required": ["service_keys"],
+    },
+}
+
+_AI_SYSTEM_PROMPT = """You match a patient's plain-language description of \
+their situation to entries in a fixed catalog of priced medical procedures.
+
+Rules:
+- Only ever choose service_key values that appear in the catalog below, \
+copied character-for-character.
+- Order your answer best match first.
+- If nothing in the catalog plausibly matches, return an empty list. Never \
+guess or pick something loosely related just to return a non-empty answer.
+- This is catalog lookup only. Never give medical advice, a diagnosis, or \
+any medical opinion — only ever call the match_services tool.
+
+Catalog (service_key | display name | category):
+{catalog}"""
+
+# Single uvicorn worker (see the __main__ block at the bottom of this file —
+# no `workers=` argument), so this in-process dict is safe: there's exactly
+# one process ever touching it. Not durable across a restart, and wouldn't
+# be safe if this ever ran with multiple workers — fine for a single $6/mo
+# container, revisit if that changes.
+_rate_state: dict[str, list[float]] = {}
+
+
+def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
+    now = time.time()
+    hits = [t for t in _rate_state.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(429, "Too many AI search requests — try again in a minute.")
+    hits.append(now)
+    _rate_state[ip] = hits
+
+
+class AISearchBody(BaseModel):
+    query: str = Field(..., min_length=3, max_length=300)
+
+
+@app.post("/api/services/ai-search")
+def ai_search(body: AISearchBody, request: Request):
+    """Fallback for when normal keyword search (GET /api/services) already
+    came back empty. Takes a free-text description, asks an LLM to match it
+    against the real catalog, and returns only entries that survive being
+    checked against that catalog — the model's raw text is never shown to
+    the user, so it structurally cannot hand back medical advice or a
+    hallucinated result: the response is either a real, priced service or
+    nothing."""
+    if not ANTHROPIC_API_KEY:
+        return {"query": body.query, "enabled": False, "matched_keys": [], "results": [], "error": None}
+
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
+    catalog = _catalog()
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=8.0)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            system=[
+                {
+                    "type": "text",
+                    "text": _AI_SYSTEM_PROMPT.format(catalog=catalog["text"]),
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            tools=[_MATCH_TOOL],
+            tool_choice={"type": "tool", "name": "match_services"},
+            messages=[{"role": "user", "content": body.query}],
+        )
+        raw_keys: list[str] = []
+        for block in resp.content:
+            if block.type == "tool_use" and block.name == "match_services":
+                raw_keys = list(block.input.get("service_keys", []))
+                break
+        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} "
+              f"raw_matches={len(raw_keys)} "
+              f"usage={getattr(resp, 'usage', None)}")
+    except Exception as e:  # noqa: BLE001 — any failure here must fail soft
+        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} error={type(e).__name__}")
+        return {"query": body.query, "enabled": True, "matched_keys": [], "results": [],
+                "error": "ai_unavailable"}
+
+    # Hallucination guard: never trust the model's raw output. Anything not
+    # in the real catalog is silently dropped, not surfaced as an error —
+    # a model choosing zero valid keys just means no confident match.
+    valid_keys = [k for k in raw_keys if k in catalog["keys"]]
+    rows_by_key = _services_by_keys(valid_keys)
+    # Preserve the model's best-match-first ordering, not provider count —
+    # over 5 candidates the model's relevance judgement is more meaningful
+    # than which one happens to have more billing volume.
+    results = [rows_by_key[k] for k in valid_keys if k in rows_by_key]
+
+    return {"query": body.query, "enabled": True, "matched_keys": valid_keys,
+            "results": results, "error": None}
 
 
 @app.get("/api/categories")
