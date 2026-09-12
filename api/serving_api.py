@@ -43,6 +43,7 @@ Run:
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -512,6 +513,192 @@ def health():
     return {"ok": True, "slice": str(SLICE), **r[0]}
 
 
+# Common stopwords in casual health queries. The old search required EVERY
+# token to appear in display_name/search_terms — which is exactly why "my
+# knee hurts when climbing stairs" found nothing: no service's search_terms
+# contains "my" or "when". Stripping these before matching keeps the strict
+# AND behavior for the words that could plausibly appear in a service name,
+# without changing anything about how "knee mri" or "mri knee" already work.
+_SEARCH_STOPWORDS = {
+    "a", "am", "an", "and", "are", "at", "be", "been", "climb", "climbing",
+    "do", "doing", "for", "from", "had", "has", "have", "having", "i",
+    "i'm", "im", "in", "is", "it", "its", "it's", "just", "keep", "keeps",
+    "lot", "me", "my", "of", "on", "or", "really", "since", "so", "some",
+    "that", "the", "there", "this", "to", "very", "was", "when",
+    "whenever", "while", "with",
+}
+
+# Lay/symptom phrasing -> the clinical tokens a plausible service actually
+# uses in its display_name or search_terms. This is a static, one-time,
+# hand-curated table — no runtime AI call, no per-query cost — checked as
+# plain substrings of the lowercased raw query so a multi-word phrase like
+# "climbing stairs" matches wherever it sits in the sentence. It supplements
+# the catalog's own search_terms synonyms; it never replaces them, and a
+# search that already worked before this table existed still works exactly
+# the same way.
+_SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
+    # orthopedic / joint
+    "climbing stairs": ["knee", "hip"],
+    "going up stairs": ["knee", "hip"],
+    "going upstairs": ["knee", "hip"],
+    "knee hurts": ["knee"],
+    "knee pain": ["knee"],
+    "bad knee": ["knee"],
+    "hip hurts": ["hip"],
+    "hip pain": ["hip"],
+    "shoulder hurts": ["shoulder"],
+    "shoulder pain": ["shoulder"],
+    "cant lift my arm": ["shoulder", "rotator"],
+    "can't lift my arm": ["shoulder", "rotator"],
+    "back hurts": ["back", "lumbar", "spine"],
+    "back pain": ["back", "lumbar", "spine"],
+    "lower back pain": ["lumbar", "back"],
+    "neck hurts": ["neck", "cervical"],
+    "neck pain": ["neck", "cervical"],
+    "wrist hurts": ["wrist"],
+    "ankle hurts": ["ankle"],
+    "ankle pain": ["ankle"],
+    "twisted my ankle": ["ankle", "xray"],
+    "sprained my ankle": ["ankle", "xray"],
+    "think i broke": ["xray", "fracture"],
+    "might be broken": ["xray", "fracture"],
+    "popping sound": ["joint", "mri"],
+    "clicking sound": ["joint", "mri"],
+
+    # cardiac
+    "chest pain": ["chest", "cardiac", "ekg", "heart"],
+    "chest hurts": ["chest", "cardiac", "ekg", "heart"],
+    "racing heart": ["heart", "ekg", "holter"],
+    "heart racing": ["heart", "ekg", "holter"],
+    "heart palpitations": ["heart", "ekg", "holter"],
+    "irregular heartbeat": ["heart", "ekg", "holter"],
+    "skipping beats": ["heart", "holter"],
+    "high blood pressure": ["blood pressure", "cardiac"],
+
+    # respiratory
+    "trouble breathing": ["breathing", "spirometry", "pulmonology"],
+    "shortness of breath": ["breathing", "spirometry", "pulmonology"],
+    "cant breathe": ["breathing", "spirometry"],
+    "can't breathe": ["breathing", "spirometry"],
+    "wheezing": ["breathing", "spirometry", "asthma"],
+    "constant cough": ["chest", "xray", "pulmonology"],
+    "coughing up blood": ["chest", "pulmonology"],
+
+    # gastrointestinal
+    "stomach pain": ["abdominal", "abdomen"],
+    "stomach hurts": ["abdominal", "abdomen"],
+    "belly pain": ["abdominal", "abdomen"],
+    "acid reflux": ["reflux", "endoscopy"],
+    "heartburn": ["reflux", "endoscopy"],
+    "cant keep food down": ["abdominal", "endoscopy"],
+    "blood in my stool": ["colonoscopy", "fecal"],
+    "blood in stool": ["colonoscopy", "fecal"],
+    "trouble swallowing": ["swallowing", "esophageal"],
+
+    # urinary / kidney
+    "burning when i pee": ["urine", "urinalysis"],
+    "burns when i pee": ["urine", "urinalysis"],
+    "blood in my urine": ["urinalysis", "cystoscopy"],
+    "blood in urine": ["urinalysis", "cystoscopy"],
+    "frequent urination": ["urinalysis", "urodynamic"],
+    "kidney pain": ["kidney", "renal"],
+
+    # women's health / maternity
+    "missed my period": ["pregnancy"],
+    "missed period": ["pregnancy"],
+    "think im pregnant": ["pregnancy"],
+    "think i'm pregnant": ["pregnancy"],
+    "spotting": ["pregnancy", "ultrasound"],
+    "having a baby": ["delivery", "prenatal"],
+
+    # mental health
+    "cant sleep": ["sleep"],
+    "can't sleep": ["sleep"],
+    "trouble sleeping": ["sleep"],
+    "feeling anxious": ["therapy"],
+    "feeling depressed": ["therapy", "depression"],
+    "feeling sad": ["therapy", "depression"],
+    "cant focus": ["adhd", "behavioral"],
+    "cant concentrate": ["adhd", "behavioral"],
+    "panic attacks": ["therapy"],
+
+    # ENT / head
+    "ringing in my ears": ["tinnitus", "hearing"],
+    "ringing in ears": ["tinnitus", "hearing"],
+    "cant hear": ["hearing"],
+    "cant hear well": ["hearing"],
+    "dizzy": ["vestibular", "balance"],
+    "room spinning": ["vestibular", "vertigo"],
+    "sore throat": ["throat", "strep"],
+    "stuffy nose": ["sinus", "nasal"],
+    "sinus pressure": ["sinus"],
+    "ear hurts": ["ear"],
+    "earache": ["ear"],
+
+    # skin
+    "weird mole": ["skin", "mole"],
+    "strange mole": ["skin", "mole"],
+    "itchy rash": ["skin"],
+    "skin growth": ["skin", "lesion"],
+
+    # general / vague
+    "tired all the time": ["thyroid", "vitamin"],
+    "always tired": ["thyroid", "vitamin"],
+    "no energy": ["thyroid", "vitamin"],
+    "losing weight": ["thyroid"],
+    "cant lose weight": ["thyroid"],
+    "blurry vision": ["eye"],
+    "eye hurts": ["eye"],
+}
+
+
+def _search_tokens(q_: str) -> list[str]:
+    """Stopword-stripped tokens plus any symptom-phrase expansions, deduped
+    in order. Kept as its own function so the two-pass query below (strict,
+    then loosened only on a genuine zero-result miss) can reuse one list."""
+    q_lower = q_.lower()
+    extra: list[str] = []
+    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
+        if phrase in q_lower:
+            extra += mapped
+    tokens = [t for t in q_lower.split() if t not in _SEARCH_STOPWORDS] + extra
+    seen: set[str] = set()
+    return [t for t in tokens if not (t in seen or seen.add(t))]
+
+
+def _services_rows(where: list[str], params: list[Any], limit: int) -> list[dict]:
+    """Shared aggregation behind /api/services' two search passes below."""
+    # low_price/high_price use the 5th/95th percentile, not true min/max. A
+    # blanket network contract can leave a grocery-store pharmacy with a
+    # $0.01 "rate" for an MRI it will never actually perform — real data, but
+    # not a price anyone is quoted, and evidence tagging alone doesn't catch
+    # every case (some of these are tagged peer_family, not just unknown).
+    # Individual providers still show their own real rate untouched in
+    # /providers; this only keeps one bad row from setting the headline range
+    # everyone sees first.
+    #
+    # low_price_full/high_price_full are the true min/max of the same group —
+    # not hidden, just not the headline. The UI shows low_price/high_price as
+    # "typical price range" and surfaces the full pair on demand, so a $0.01
+    # blanket-contract row is still reachable, never erased.
+    return q(f"""
+        SELECT service_key,
+               any_value(display_name)      AS display_name,
+               any_value(category)          AS category,
+               count(DISTINCT npi)          AS providers,
+               median(median_rate)          AS typical_price,
+               quantile_cont(median_rate, 0.05) AS low_price,
+               quantile_cont(median_rate, 0.95) AS high_price,
+               min(median_rate)             AS low_price_full,
+               max(median_rate)             AS high_price_full
+        FROM prices
+        WHERE {' AND '.join(where)}
+        GROUP BY service_key
+        ORDER BY providers DESC
+        LIMIT {int(limit)}
+    """, params)
+
+
 @app.get("/api/services")
 def services(
     q_: str = Query("", alias="q", description="free-text procedure search"),
@@ -532,60 +719,62 @@ def services(
     # it, a $280 professional read and a $1,592 facility charge for the same
     # service get averaged and ranged together, which is not a price anyone
     # is quoted for anything.
-    where = ["is_primary"]
-    params: list[Any] = []
-    if q_:
-        # Tokenise. Matching the raw phrase as one substring meant "mri knee"
-        # found nothing, because the service is named "MRI - knee" and the
-        # punctuation sits between the words. Every token must appear
-        # somewhere in the name or the synonyms, in any order.
-        #
-        # search_terms carries the synonyms the catalog was built with, so
-        # "scan" finds imaging and "xray" finds "X-ray" without the UI knowing.
-        for tok in q_.lower().split():
-            where.append("(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)")
-            params += [f"%{tok}%", f"%{tok}%"]
+    base_where = ["is_primary"]
+    base_params: list[Any] = []
     if category:
-        where.append("category = ?")
-        params.append(category)
+        base_where.append("category = ?")
+        base_params.append(category)
     if categories:
         cat_list = [c.strip() for c in categories.split(",") if c.strip()]
-        where.append(f"category IN ({','.join(['?'] * len(cat_list))})")
-        params += cat_list
+        base_where.append(f"category IN ({','.join(['?'] * len(cat_list))})")
+        base_params += cat_list
     if keys:
         key_list = [k.strip() for k in keys.split(",") if k.strip()]
-        where.append(f"service_key IN ({','.join(['?'] * len(key_list))})")
-        params += key_list
+        base_where.append(f"service_key IN ({','.join(['?'] * len(key_list))})")
+        base_params += key_list
 
-    # low_price/high_price use the 5th/95th percentile, not true min/max. A
-    # blanket network contract can leave a grocery-store pharmacy with a
-    # $0.01 "rate" for an MRI it will never actually perform — real data, but
-    # not a price anyone is quoted, and evidence tagging alone doesn't catch
-    # every case (some of these are tagged peer_family, not just unknown).
-    # Individual providers still show their own real rate untouched in
-    # /providers; this only keeps one bad row from setting the headline range
-    # everyone sees first.
+    if not q_:
+        return {"query": q_, "results": _services_rows(base_where, base_params, limit)}
+
+    tokens = _search_tokens(q_)
+    if not tokens:
+        return {"query": q_, "results": _services_rows(base_where, base_params, limit)}
+
+    # Pass 1: every token must appear somewhere in the name or the synonyms,
+    # in any order — same strict matching this endpoint always used, so an
+    # exact search like "knee mri" is unaffected by anything below.
+    and_where = list(base_where)
+    and_params = list(base_params)
+    for tok in tokens:
+        and_where.append("(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)")
+        and_params += [f"%{tok}%", f"%{tok}%"]
+    rows = _services_rows(and_where, and_params, limit)
+    if rows:
+        return {"query": q_, "results": rows}
+
+    # Pass 2: only on a genuine zero-result miss, loosen to ANY token
+    # matching. This is what turns "my knee hurts when climbing stairs" (all-
+    # stopword-or-unmatched except the symptom-expanded "knee"/"hip") into
+    # real results instead of an empty page — without ever weakening a
+    # search that pass 1 already satisfied.
     #
-    # low_price_full/high_price_full are the true min/max of the same group —
-    # not hidden, just not the headline. The UI shows low_price/high_price as
-    # "typical price range" and surfaces the full pair on demand, so a $0.01
-    # blanket-contract row is still reachable, never erased.
-    return {"query": q_, "results": q(f"""
-        SELECT service_key,
-               any_value(display_name)      AS display_name,
-               any_value(category)          AS category,
-               count(DISTINCT npi)          AS providers,
-               median(median_rate)          AS typical_price,
-               quantile_cont(median_rate, 0.05) AS low_price,
-               quantile_cont(median_rate, 0.95) AS high_price,
-               min(median_rate)             AS low_price_full,
-               max(median_rate)             AS high_price_full
-        FROM prices
-        WHERE {' AND '.join(where)}
-        GROUP BY service_key
-        ORDER BY providers DESC
-        LIMIT {int(limit)}
-    """, params)}
+    # Word-boundary regex here, not the plain substring LIKE pass 1 uses —
+    # requiring every token to match (pass 1) makes a stray substring hit
+    # nearly harmless, but with only ONE token needed to match, "pee" as a
+    # bare substring silently matches "speech" (s-PEE-ch) and pulls in
+    # unrelated results. \b keeps this pass exact per-word while still
+    # matching across the catalog's "|"-joined search_terms.
+    or_where = list(base_where)
+    or_params = list(base_params)
+    or_clause = " OR ".join(
+        "(regexp_matches(lower(display_name), ?) OR regexp_matches(lower(search_terms), ?))"
+        for _ in tokens
+    )
+    or_where.append(f"({or_clause})")
+    for tok in tokens:
+        pattern = rf"\b{re.escape(tok)}\b"
+        or_params += [pattern, pattern]
+    return {"query": q_, "results": _services_rows(or_where, or_params, limit)}
 
 
 def _services_by_keys(keys: list[str]) -> dict[str, dict]:
