@@ -43,7 +43,6 @@ Run:
 from __future__ import annotations
 
 import os
-import re
 import threading
 import time
 from pathlib import Path
@@ -654,8 +653,10 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
 
 def _search_tokens(q_: str) -> list[str]:
     """Stopword-stripped tokens plus any symptom-phrase expansions, deduped
-    in order. Kept as its own function so the two-pass query below (strict,
-    then loosened only on a genuine zero-result miss) can reuse one list."""
+    in order. Used as-is for pass 1's strict AND below — every token here,
+    however short, has always been fair game for that pass, since requiring
+    ALL of them to match already makes a short word like "ct" or "mri" safe.
+    See _loose_match_tokens() for the narrower list pass 2 uses."""
     q_lower = q_.lower()
     extra: list[str] = []
     for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
@@ -664,6 +665,28 @@ def _search_tokens(q_: str) -> list[str]:
     tokens = [t for t in q_lower.split() if t not in _SEARCH_STOPWORDS] + extra
     seen: set[str] = set()
     return [t for t in tokens if not (t in seen or seen.add(t))]
+
+
+def _loose_match_tokens(q_: str, tokens: list[str]) -> list[str]:
+    """Subset of `tokens` safe for pass 2's any-token-matches OR query.
+
+    Pass 1's strict AND makes a short raw word like "pee" harmless — every
+    other token still has to match too. Pass 2 only needs ONE token to
+    match, and DuckDB's `%pee%` cheerfully matches "speech" (s-PEE-ct). The
+    precise fix is a word-boundary regex, but regexp_matches is far more
+    expensive than LIKE per row, and over 21M rows on the $6 droplet's
+    single vCPU that turned a zero-result fallback into an 80+ second query
+    that stalled the whole single-worker server for every other visitor —
+    tried and reverted. So: drop raw query words under 4 characters here
+    (only here, not from pass 1) and keep the cheap LIKE plan. Curated
+    _SYMPTOM_EXPANSIONS words are kept regardless of length — they're
+    deliberate additions, not noise, so "eye"/"ear" still work."""
+    q_lower = q_.lower()
+    expansion_words: set[str] = set()
+    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
+        if phrase in q_lower:
+            expansion_words.update(mapped)
+    return [t for t in tokens if t in expansion_words or len(t) >= 4]
 
 
 def _services_rows(where: list[str], params: list[Any], limit: int) -> list[dict]:
@@ -756,24 +779,21 @@ def services(
     # matching. This is what turns "my knee hurts when climbing stairs" (all-
     # stopword-or-unmatched except the symptom-expanded "knee"/"hip") into
     # real results instead of an empty page — without ever weakening a
-    # search that pass 1 already satisfied.
-    #
-    # Word-boundary regex here, not the plain substring LIKE pass 1 uses —
-    # requiring every token to match (pass 1) makes a stray substring hit
-    # nearly harmless, but with only ONE token needed to match, "pee" as a
-    # bare substring silently matches "speech" (s-PEE-ch) and pulls in
-    # unrelated results. \b keeps this pass exact per-word while still
-    # matching across the catalog's "|"-joined search_terms.
+    # search that pass 1 already satisfied. See _loose_match_tokens() for
+    # why this is a shorter list than pass 1's, and why it's still LIKE
+    # rather than a word-boundary regex.
+    loose_tokens = _loose_match_tokens(q_, tokens)
+    if not loose_tokens:
+        return {"query": q_, "results": []}
     or_where = list(base_where)
     or_params = list(base_params)
     or_clause = " OR ".join(
-        "(regexp_matches(lower(display_name), ?) OR regexp_matches(lower(search_terms), ?))"
-        for _ in tokens
+        "(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)"
+        for _ in loose_tokens
     )
     or_where.append(f"({or_clause})")
-    for tok in tokens:
-        pattern = rf"\b{re.escape(tok)}\b"
-        or_params += [pattern, pattern]
+    for tok in loose_tokens:
+        or_params += [f"%{tok}%", f"%{tok}%"]
     return {"query": q_, "results": _services_rows(or_where, or_params, limit)}
 
 
