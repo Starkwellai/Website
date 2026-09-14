@@ -186,14 +186,14 @@ export function Trust() {
               We have your back
             </h2>
             <p className="text-lg text-gray-700 mb-8 leading-relaxed max-w-2xl mx-auto">
-              If you encounter any issues with a provider or have concerns about your care, our dedicated support team is here to help. We offer a fair and transparent dispute resolution process to ensure every patient and provider is heard.
+              If you encounter an issue with a provider or a price that looks wrong, email us —
+              we're a small team, so there's no case-management system yet, but a real person
+              reads every message.
             </p>
-            {/* No support/contact page exists yet — same gap as the site
-                nav's "Help" link and Dashboard's Contact Support. */}
             <Button
               size="lg"
               className="bg-blue-600 hover:bg-blue-700 text-lg px-8"
-              disabled
+              onClick={() => navigate("/help")}
             >
               <Mail className="mr-2 size-5" />
               Contact Support

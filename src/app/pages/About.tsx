@@ -228,7 +228,7 @@ export function About() {
                 className="h-8 mb-4"
               />
               <p className="text-sm text-gray-600">
-                Your AI-powered healthcare marketplace for finding care, comparing prices, and booking appointments.
+                Your AI-powered healthcare marketplace for finding care and comparing prices.
               </p>
             </div>
 

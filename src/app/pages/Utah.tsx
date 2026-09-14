@@ -281,7 +281,7 @@ export function Utah() {
                 promise is also dropped — there is no scheduling integration, so
                 claiming instant booking describes a feature that does not exist. */}
             <p className="text-xl text-gray-600 mb-10 max-w-3xl mx-auto">
-              Compare published prices from 31,620 Utah providers, across 166 procedures.
+              Compare published prices from 31,620 Utah providers, across 620 procedures.
             </p>
 
             {/* Search Bar */}
@@ -328,14 +328,18 @@ export function Utah() {
                 monthly rebuild. Previous values were "120+ Verified Providers"
                 (we price 31,271), "Up to 60% savings" sourced to Duly Health and
                 Care — another company's marketing, not a measurement of this
-                data — and "14 Cities" (229). */}
+                data — and "14 Cities" (229).
+                2026-09-10: recounted the price-gap ratio after the catalog grew
+                from 166 to 620 qualifying procedures (50+ providers each) —
+                see the fuller methodology note on Home.tsx. Ratio moved 2.0x
+                -> 2.7x. */}
             <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
               <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
                 <div className="text-2xl font-bold text-blue-600 mb-1">31,620</div>
                 <div className="text-sm text-gray-600">Providers priced</div>
               </div>
               <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
-                <div className="text-2xl font-bold text-green-600 mb-1">2.0&times;</div>
+                <div className="text-2xl font-bold text-green-600 mb-1">2.7&times;</div>
                 <div className="text-sm text-gray-600 mb-1">price gap, same procedure</div>
                 <div className="text-[10px] text-[#9ca3af]">Middle 80% of providers</div>
               </div>
@@ -1284,7 +1288,7 @@ export function Utah() {
                 className="h-8 mb-4"
               />
               <p className="text-sm text-gray-600">
-                Your AI-powered healthcare marketplace for finding care, comparing prices, and booking appointments.
+                Your AI-powered healthcare marketplace for finding care and comparing prices.
               </p>
             </div>
 

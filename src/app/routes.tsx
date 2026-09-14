@@ -12,6 +12,7 @@ import { HipaaPrivacy } from "./pages/HipaaPrivacy";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { SubscriptionTiers } from "./pages/SubscriptionTiers";
 import { Trust } from "./pages/Trust";
+import { Help } from "./pages/Help";
 import { About } from "./pages/About";
 import { Utah } from "./pages/Utah";
 import { NotFound } from "./pages/NotFound";
@@ -93,6 +94,10 @@ export const router = createBrowserRouter([
   {
     path: "/trust",
     element: <Trust />,
+  },
+  {
+    path: "/help",
+    element: <Help />,
   },
   {
     path: "/about",

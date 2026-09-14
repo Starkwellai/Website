@@ -161,8 +161,13 @@ export function Home() {
                 to 60% vs. hospital pricing" — a figure attributed elsewhere on
                 this site to Duly Health and Care, i.e. another company's
                 marketing, never measured against this dataset. The spread below
-                IS measured: median ratio of highest to lowest like-for-like
-                price, across the 166 procedures with 50+ providers. */}
+                IS measured: median ratio of the 90th to 10th percentile
+                like-for-like price (same billing component, not mixing
+                professional and facility fees), across procedures with 50+
+                providers. Recomputed 2026-09-10 against the current catalog:
+                620 qualifying procedures (was 166), median ratio 2.7x (was
+                2.0x) — the catalog grew to cover far more high-variance
+                specialty procedures, which widened the typical gap. */}
             <p className="text-sm text-teal-600 mb-8">
               ✦ A knee MRI is $212 at one Utah hospital and $382 at another — see what yours costs
             </p>
@@ -228,9 +233,9 @@ export function Home() {
               <div className="text-[13px] text-gray-600">Utah providers priced</div>
             </div>
             <div className="text-center border-r border-gray-200 last:border-r-0">
-              <div className="text-[30px] font-bold text-[#2563eb] mb-1">2.0&times;</div>
+              <div className="text-[30px] font-bold text-[#2563eb] mb-1">2.7&times;</div>
               <div className="text-[13px] text-gray-600 mb-1">Price gap for the same procedure</div>
-              <div className="text-[10px] text-[#9ca3af]">Middle 80% of providers, 166 procedures</div>
+              <div className="text-[10px] text-[#9ca3af]">Middle 80% of providers, 620 procedures</div>
             </div>
             <div className="text-center border-r border-gray-200 last:border-r-0">
               <div className="text-[30px] font-bold text-[#2563eb] mb-1">229</div>
@@ -504,7 +509,7 @@ export function Home() {
                 <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-100">
                   <div>
                     <div className="font-semibold text-gray-900">5.9 million prices</div>
-                    <div className="text-sm text-gray-600">across 166 procedures</div>
+                    <div className="text-sm text-gray-600">across 620 procedures</div>
                   </div>
                   <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap">
                     Published rates
@@ -525,7 +530,7 @@ export function Home() {
             </div>
             <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
             <div className="text-gray-700">
-              <span className="text-2xl font-bold text-gray-900">166</span>
+              <span className="text-2xl font-bold text-gray-900">620</span>
               <span className="ml-2 text-base">procedures covered</span>
             </div>
             <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
@@ -575,9 +580,9 @@ export function Home() {
               <div className="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                 3
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Book</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Choose</h3>
               <p className="text-gray-600">
-                See what each provider is paid for the procedure, then choose. No phone calls, no surprise bill.
+                See what each provider actually charges, then reach out with confidence — no surprise bill.
               </p>
             </div>
           </div>
@@ -595,7 +600,48 @@ export function Home() {
         </div>
       </section>
 
-      {/* For Healthcare Providers Section */}
+      {/* Trust Stats -- "3,200+ Patients trust Starkwell" and "24/7 Book
+          appointments anytime" were unverifiable/false the same way the
+          stats already cleaned up elsewhere on this page were: there is no
+          user base to count, and there is no booking feature. Replaced with
+          claims that are actually true of the product today. */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-6">
+          <div className="grid md:grid-cols-3 gap-8 text-center max-w-4xl mx-auto">
+            <div>
+              <div className="flex justify-center mb-4">
+                <Heart className="size-12 text-blue-600" />
+              </div>
+              <h3 className="text-4xl font-bold text-gray-900 mb-2">Free</h3>
+              <p className="text-gray-600">For patients to search and compare</p>
+            </div>
+
+            <div>
+              <div className="flex justify-center mb-4">
+                <Clock className="size-12 text-blue-600" />
+              </div>
+              <h3 className="text-4xl font-bold text-gray-900 mb-2">24/7</h3>
+              <p className="text-gray-600">Search prices anytime, no account needed</p>
+            </div>
+
+            <div>
+              <div className="flex justify-center mb-4">
+                <Award className="size-12 text-blue-600" />
+              </div>
+              <h3 className="text-4xl font-bold text-gray-900 mb-2">100%</h3>
+              <p className="text-gray-600">HIPAA compliant & secure</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* For Healthcare Providers Section -- moved below the patient-facing
+          trust stats (was previously sandwiched in the middle of the patient
+          search/compare/choose flow, right after it). Providers already have
+          two other clear entry points on this page ("List Your Practice" in
+          the hero and the closing CTA) plus the "For Providers" nav link, so
+          this section's job is a deeper pitch once a patient visitor has
+          seen the whole patient story, not a mid-flow interruption. */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-6">
           <div className="max-w-6xl mx-auto">
@@ -606,7 +652,7 @@ export function Home() {
                   Your next self-pay patients are already searching
                 </h2>
                 <p className="text-lg text-blue-100 mb-8">
-                  Reach price-conscious Utah patients actively looking for quality care at transparent prices. Join the marketplace that puts you in front of patients ready to book.
+                  Reach price-conscious Utah patients actively looking for quality care at transparent prices. Join the marketplace that puts your prices in front of patients ready to choose you.
                 </p>
                 <ul className="space-y-4">
                   <li className="flex items-start gap-3">
@@ -619,8 +665,8 @@ export function Home() {
                   <li className="flex items-start gap-3">
                     <CheckCircle className="size-6 text-green-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-lg">Real-time booking</div>
-                      <div className="text-blue-100 text-sm">Patients schedule instantly, reducing no-shows</div>
+                      <div className="font-semibold text-lg">No phone tag</div>
+                      <div className="text-blue-100 text-sm">Patients see your price before they ever call</div>
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
@@ -710,7 +756,7 @@ export function Home() {
                     />
                   </div>
 
-                  <Button 
+                  <Button
                     type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-semibold"
                   >
@@ -728,37 +774,6 @@ export function Home() {
         </div>
       </section>
 
-      {/* Trust Stats */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-6">
-          <div className="grid md:grid-cols-3 gap-8 text-center max-w-4xl mx-auto">
-            <div>
-              <div className="flex justify-center mb-4">
-                <Heart className="size-12 text-blue-600" />
-              </div>
-              <h3 className="text-4xl font-bold text-gray-900 mb-2">3,200+</h3>
-              <p className="text-gray-600">Patients trust Starkwell</p>
-            </div>
-
-            <div>
-              <div className="flex justify-center mb-4">
-                <Clock className="size-12 text-blue-600" />
-              </div>
-              <h3 className="text-4xl font-bold text-gray-900 mb-2">24/7</h3>
-              <p className="text-gray-600">Book appointments anytime</p>
-            </div>
-
-            <div>
-              <div className="flex justify-center mb-4">
-                <Award className="size-12 text-blue-600" />
-              </div>
-              <h3 className="text-4xl font-bold text-gray-900 mb-2">100%</h3>
-              <p className="text-gray-600">HIPAA compliant & secure</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Final CTA Section */}
       <section className="py-16 bg-gradient-to-br from-blue-600 to-teal-500">
         <div className="container mx-auto px-6">
@@ -766,8 +781,12 @@ export function Home() {
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Healthcare on your terms. Starting today.
             </h2>
+            {/* "Join thousands of Utah patients who stopped overpaying" was the
+                same kind of invented usage claim as the "3,200+" stat above —
+                no user base exists yet to count. Replaced with a claim about
+                the data, which is real and already true today. */}
             <p className="text-lg text-white mb-8 max-w-2xl mx-auto">
-              Join thousands of Utah patients who stopped overpaying — or list your practice and reach them.
+              See real Utah prices before you ever pick up the phone — or list your practice and reach patients who are looking.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button 
@@ -802,7 +821,7 @@ export function Home() {
                 className="h-8 mb-4"
               />
               <p className="text-sm text-gray-600">
-                Your AI-powered healthcare marketplace for finding care, comparing prices, and booking appointments.
+                Your AI-powered healthcare marketplace for finding care and comparing prices.
               </p>
             </div>
 

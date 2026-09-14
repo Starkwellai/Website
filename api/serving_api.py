@@ -43,15 +43,19 @@ Run:
 from __future__ import annotations
 
 import os
+import shutil
 import threading
+import time
 from pathlib import Path
 from typing import Any, Optional
 
+import anthropic
 import duckdb
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 # Month directories mean this path never changes when a new month is published;
 # build_serving.py rewrites this file from whichever month is _COMPLETE.
@@ -114,6 +118,14 @@ PROVIDERS = Path(os.environ.get(
 # Medicine Physician"). Public, stable code set — not derived or inferred.
 TAXONOMY = Path(os.environ.get(
     "STARKWELL_TAXONOMY", "D:/Starkwell/data/reference/nucc_taxonomy_251.csv"))
+
+# Unlike every other STARKWELL_* var above, this is a secret, not a file path
+# — it must never be baked into the Docker image's ENV block (that would put
+# it in the image's layer history). It's injected at `docker run` time via
+# `--env-file`, from a file that lives only on the droplet. Empty by default,
+# which is what lets /api/services/ai-search degrade to "enabled": false
+# instead of crashing when nobody has configured a key yet.
+ANTHROPIC_API_KEY = os.environ.get("STARKWELL_ANTHROPIC_API_KEY", "")
 
 # Street-token canonicalisation, used ONLY to join slice addresses to CMS
 # facility names. The slice writes "4401 HARRISON BLVD", CMS writes "4401
@@ -197,7 +209,7 @@ app = FastAPI(title="Starkwell serving API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -222,6 +234,21 @@ class RewritePrefix:
 
 
 app.add_middleware(RewritePrefix, prefix="/serving", target="/api")
+
+
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Vite fingerprints every JS/CSS filename with a content hash, so a
+    file at an /assets/ URL never changes — safe to cache forever. This
+    covers only that half; the index.html half (same URL every deploy, new
+    content each time, so it must always be revalidated) is set at the
+    point index.html is actually returned — see the `spa` catch-all route
+    below, since React Router paths like /prices also resolve to that same
+    file and this path-based check alone can't see that."""
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def _build_system_view(con: duckdb.DuckDBPyConnection) -> None:
@@ -419,16 +446,48 @@ def _build_specialty_view(con: duckdb.DuckDBPyConnection) -> None:
     """)
 
 
+# Where the materialized `prices` table lives — see db() below. Inside the
+# container's own ephemeral layer (not a mounted volume), so a fresh `docker
+# run` always starts clean. An in-place `docker restart` (which is what
+# `--restart unless-stopped` does after a crash) reuses that same layer, so
+# db() deletes any leftover file here before rebuilding — see the OOM note.
+DUCKDB_FILE = Path(os.environ.get("STARKWELL_DUCKDB_FILE", "/tmp/starkwell_cache.duckdb"))
+DUCKDB_SPILL_DIR = Path(os.environ.get("STARKWELL_DUCKDB_SPILL", "/tmp/starkwell_spill"))
+
+
 def db() -> duckdb.DuckDBPyConnection:
     global _con
     if _con is None:
         if not SLICE.exists():
             raise HTTPException(503, f"serving slice not found: {SLICE}")
-        # Small limits on purpose: this runs alongside a 24 GB rebuild.
-        _con = duckdb.connect()
+        # File-backed, not duckdb.connect() (in-memory) — the first version of
+        # this materialization used an in-memory table and OOM-killed the
+        # production droplet: the 452MB parquet's denormalized text columns
+        # (display_name/category/search_terms repeated across 21M rows)
+        # expand to 1GB+ resident once fully materialized, on a droplet with
+        # 1.9GB total RAM and no swap. A file-backed database plus a real
+        # memory_limit lets DuckDB spill the build to disk instead of
+        # requiring the whole thing resident in RAM — verified locally this
+        # keeps peak RSS under ~700MB while building the exact same table.
+        # Deleting any stale file first guards the crash-then-auto-restart
+        # case: `--restart unless-stopped` reuses the same container
+        # filesystem, so a file left over from an interrupted previous build
+        # must not be reopened as if it were complete.
+        if DUCKDB_FILE.exists():
+            DUCKDB_FILE.unlink()
+        if DUCKDB_SPILL_DIR.exists():
+            shutil.rmtree(DUCKDB_SPILL_DIR, ignore_errors=True)
+        DUCKDB_SPILL_DIR.mkdir(parents=True, exist_ok=True)
+        _con = duckdb.connect(database=str(DUCKDB_FILE))
         _con.execute("SET enable_progress_bar=false")
         _con.execute("SET threads=2")
-        _con.execute("SET memory_limit='2GB'")
+        # 500MB, not the old view-era '2GB' — this droplet only HAS 1.9GB
+        # total, so a duckdb-internal limit above that number was never a
+        # real ceiling. 500MB leaves headroom for the OS/uvicorn/Python
+        # overhead alongside it; temp_directory below is what lets a build
+        # that needs more than this spill to disk instead of OOMing.
+        _con.execute("SET memory_limit='500MB'")
+        _con.execute(f"SET temp_directory='{DUCKDB_SPILL_DIR.as_posix()}'")
         # UTAH ONLY. The serving slice is not state-filtered — build_serving.py
         # has no state predicate — so it carries 3,196 providers in other states
         # (WA 1,221, FL 236, TX 204, ID 158, AZ 145...), 460,139 rows, 7.2% of
@@ -440,10 +499,22 @@ def db() -> duckdb.DuckDBPyConnection:
         # Filtering here rather than in the parquet keeps the slice intact for
         # any future multi-state use, and costs one join against a 4.5 MB file.
         # The proper home for this is build_serving.py; see the note there.
+        #
+        # TABLE, not VIEW: a view is just a stored query — DuckDB re-runs the
+        # full 452MB parquet scan + join on EVERY query that touches `prices`,
+        # which is every search, every health check, every provider lookup.
+        # On the production droplet's single weak vCPU that was ~7s per
+        # request, serialized (single uvicorn worker), so two visitors
+        # searching a few seconds apart queue up behind each other. TABLE
+        # pays that cost once, here, at container startup — after which
+        # every query just scans an already-materialized table. There's no
+        # refresh path that expects `prices` to reflect a changed parquet
+        # without a restart (see db()'s _con caching above), so nothing else
+        # in this file needs to change for this to be safe.
         providers = PROVIDERS
         if providers.exists():
             _con.execute(f"""
-                CREATE VIEW prices AS
+                CREATE TABLE prices AS
                 SELECT s.* FROM read_parquet('{SLICE.as_posix()}') s
                 JOIN (SELECT DISTINCT CAST(npi AS VARCHAR) AS npi
                       FROM read_parquet('{providers.as_posix()}')
@@ -451,7 +522,7 @@ def db() -> duckdb.DuckDBPyConnection:
                   ON u.npi = CAST(s.npi AS VARCHAR)
             """)
         else:
-            _con.execute(f"CREATE VIEW prices AS "
+            _con.execute(f"CREATE TABLE prices AS "
                          f"SELECT * FROM read_parquet('{SLICE.as_posix()}')")
         _build_system_view(_con)
         _build_org_view(_con)
@@ -486,6 +557,216 @@ def health():
     return {"ok": True, "slice": str(SLICE), **r[0]}
 
 
+# Common stopwords in casual health queries. The old search required EVERY
+# token to appear in display_name/search_terms — which is exactly why "my
+# knee hurts when climbing stairs" found nothing: no service's search_terms
+# contains "my" or "when". Stripping these before matching keeps the strict
+# AND behavior for the words that could plausibly appear in a service name,
+# without changing anything about how "knee mri" or "mri knee" already work.
+_SEARCH_STOPWORDS = {
+    "a", "am", "an", "and", "are", "at", "be", "been", "climb", "climbing",
+    "do", "doing", "for", "from", "had", "has", "have", "having", "i",
+    "i'm", "im", "in", "is", "it", "its", "it's", "just", "keep", "keeps",
+    "lot", "me", "my", "of", "on", "or", "really", "since", "so", "some",
+    "that", "the", "there", "this", "to", "very", "was", "when",
+    "whenever", "while", "with",
+}
+
+# Lay/symptom phrasing -> the clinical tokens a plausible service actually
+# uses in its display_name or search_terms. This is a static, one-time,
+# hand-curated table — no runtime AI call, no per-query cost — checked as
+# plain substrings of the lowercased raw query so a multi-word phrase like
+# "climbing stairs" matches wherever it sits in the sentence. It supplements
+# the catalog's own search_terms synonyms; it never replaces them, and a
+# search that already worked before this table existed still works exactly
+# the same way.
+_SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
+    # orthopedic / joint
+    "climbing stairs": ["knee", "hip"],
+    "going up stairs": ["knee", "hip"],
+    "going upstairs": ["knee", "hip"],
+    "knee hurts": ["knee"],
+    "knee pain": ["knee"],
+    "bad knee": ["knee"],
+    "hip hurts": ["hip"],
+    "hip pain": ["hip"],
+    "shoulder hurts": ["shoulder"],
+    "shoulder pain": ["shoulder"],
+    "cant lift my arm": ["shoulder", "rotator"],
+    "can't lift my arm": ["shoulder", "rotator"],
+    "back hurts": ["back", "lumbar", "spine"],
+    "back pain": ["back", "lumbar", "spine"],
+    "lower back pain": ["lumbar", "back"],
+    "neck hurts": ["neck", "cervical"],
+    "neck pain": ["neck", "cervical"],
+    "wrist hurts": ["wrist"],
+    "ankle hurts": ["ankle"],
+    "ankle pain": ["ankle"],
+    "twisted my ankle": ["ankle", "xray"],
+    "sprained my ankle": ["ankle", "xray"],
+    "think i broke": ["xray", "fracture"],
+    "might be broken": ["xray", "fracture"],
+    "popping sound": ["joint", "mri"],
+    "clicking sound": ["joint", "mri"],
+
+    # cardiac
+    "chest pain": ["chest", "cardiac", "ekg", "heart"],
+    "chest hurts": ["chest", "cardiac", "ekg", "heart"],
+    "racing heart": ["heart", "ekg", "holter"],
+    "heart racing": ["heart", "ekg", "holter"],
+    "heart palpitations": ["heart", "ekg", "holter"],
+    "irregular heartbeat": ["heart", "ekg", "holter"],
+    "skipping beats": ["heart", "holter"],
+    "high blood pressure": ["blood pressure", "cardiac"],
+
+    # respiratory
+    "trouble breathing": ["breathing", "spirometry", "pulmonology"],
+    "shortness of breath": ["breathing", "spirometry", "pulmonology"],
+    "cant breathe": ["breathing", "spirometry"],
+    "can't breathe": ["breathing", "spirometry"],
+    "wheezing": ["breathing", "spirometry", "asthma"],
+    "constant cough": ["chest", "xray", "pulmonology"],
+    "coughing up blood": ["chest", "pulmonology"],
+
+    # gastrointestinal
+    "stomach pain": ["abdominal", "abdomen"],
+    "stomach hurts": ["abdominal", "abdomen"],
+    "belly pain": ["abdominal", "abdomen"],
+    "acid reflux": ["reflux", "endoscopy"],
+    "heartburn": ["reflux", "endoscopy"],
+    "cant keep food down": ["abdominal", "endoscopy"],
+    "blood in my stool": ["colonoscopy", "fecal"],
+    "blood in stool": ["colonoscopy", "fecal"],
+    "trouble swallowing": ["swallowing", "esophageal"],
+
+    # urinary / kidney
+    "burning when i pee": ["urine", "urinalysis"],
+    "burns when i pee": ["urine", "urinalysis"],
+    "blood in my urine": ["urinalysis", "cystoscopy"],
+    "blood in urine": ["urinalysis", "cystoscopy"],
+    "frequent urination": ["urinalysis", "urodynamic"],
+    "kidney pain": ["kidney", "renal"],
+
+    # women's health / maternity
+    "missed my period": ["pregnancy"],
+    "missed period": ["pregnancy"],
+    "think im pregnant": ["pregnancy"],
+    "think i'm pregnant": ["pregnancy"],
+    "spotting": ["pregnancy", "ultrasound"],
+    "having a baby": ["delivery", "prenatal"],
+
+    # mental health
+    "cant sleep": ["sleep"],
+    "can't sleep": ["sleep"],
+    "trouble sleeping": ["sleep"],
+    "feeling anxious": ["therapy"],
+    "feeling depressed": ["therapy", "depression"],
+    "feeling sad": ["therapy", "depression"],
+    "cant focus": ["adhd", "behavioral"],
+    "cant concentrate": ["adhd", "behavioral"],
+    "panic attacks": ["therapy"],
+
+    # ENT / head
+    "ringing in my ears": ["tinnitus", "hearing"],
+    "ringing in ears": ["tinnitus", "hearing"],
+    "cant hear": ["hearing"],
+    "cant hear well": ["hearing"],
+    "dizzy": ["vestibular", "balance"],
+    "room spinning": ["vestibular", "vertigo"],
+    "sore throat": ["throat", "strep"],
+    "stuffy nose": ["sinus", "nasal"],
+    "sinus pressure": ["sinus"],
+    "ear hurts": ["ear"],
+    "earache": ["ear"],
+
+    # skin
+    "weird mole": ["skin", "mole"],
+    "strange mole": ["skin", "mole"],
+    "itchy rash": ["skin"],
+    "skin growth": ["skin", "lesion"],
+
+    # general / vague
+    "tired all the time": ["thyroid", "vitamin"],
+    "always tired": ["thyroid", "vitamin"],
+    "no energy": ["thyroid", "vitamin"],
+    "losing weight": ["thyroid"],
+    "cant lose weight": ["thyroid"],
+    "blurry vision": ["eye"],
+    "eye hurts": ["eye"],
+}
+
+
+def _search_tokens(q_: str) -> list[str]:
+    """Stopword-stripped tokens plus any symptom-phrase expansions, deduped
+    in order. Used as-is for pass 1's strict AND below — every token here,
+    however short, has always been fair game for that pass, since requiring
+    ALL of them to match already makes a short word like "ct" or "mri" safe.
+    See _loose_match_tokens() for the narrower list pass 2 uses."""
+    q_lower = q_.lower()
+    extra: list[str] = []
+    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
+        if phrase in q_lower:
+            extra += mapped
+    tokens = [t for t in q_lower.split() if t not in _SEARCH_STOPWORDS] + extra
+    seen: set[str] = set()
+    return [t for t in tokens if not (t in seen or seen.add(t))]
+
+
+def _loose_match_tokens(q_: str, tokens: list[str]) -> list[str]:
+    """Subset of `tokens` safe for pass 2's any-token-matches OR query.
+
+    Pass 1's strict AND makes a short raw word like "pee" harmless — every
+    other token still has to match too. Pass 2 only needs ONE token to
+    match, and DuckDB's `%pee%` cheerfully matches "speech" (s-PEE-ct). The
+    precise fix is a word-boundary regex, but regexp_matches is far more
+    expensive than LIKE per row, and over 21M rows on the $6 droplet's
+    single vCPU that turned a zero-result fallback into an 80+ second query
+    that stalled the whole single-worker server for every other visitor —
+    tried and reverted. So: drop raw query words under 4 characters here
+    (only here, not from pass 1) and keep the cheap LIKE plan. Curated
+    _SYMPTOM_EXPANSIONS words are kept regardless of length — they're
+    deliberate additions, not noise, so "eye"/"ear" still work."""
+    q_lower = q_.lower()
+    expansion_words: set[str] = set()
+    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
+        if phrase in q_lower:
+            expansion_words.update(mapped)
+    return [t for t in tokens if t in expansion_words or len(t) >= 4]
+
+
+def _services_rows(where: list[str], params: list[Any], limit: int) -> list[dict]:
+    """Shared aggregation behind /api/services' two search passes below."""
+    # low_price/high_price use the 5th/95th percentile, not true min/max. A
+    # blanket network contract can leave a grocery-store pharmacy with a
+    # $0.01 "rate" for an MRI it will never actually perform — real data, but
+    # not a price anyone is quoted, and evidence tagging alone doesn't catch
+    # every case (some of these are tagged peer_family, not just unknown).
+    # Individual providers still show their own real rate untouched in
+    # /providers; this only keeps one bad row from setting the headline range
+    # everyone sees first.
+    #
+    # low_price_full/high_price_full are the true min/max of the same group —
+    # not hidden, just not the headline. The UI shows low_price/high_price as
+    # "typical price range" and surfaces the full pair on demand, so a $0.01
+    # blanket-contract row is still reachable, never erased.
+    return q(f"""
+        SELECT service_key,
+               any_value(display_name)      AS display_name,
+               any_value(category)          AS category,
+               count(DISTINCT npi)          AS providers,
+               median(median_rate)          AS typical_price,
+               quantile_cont(median_rate, 0.05) AS low_price,
+               quantile_cont(median_rate, 0.95) AS high_price,
+               min(median_rate)             AS low_price_full,
+               max(median_rate)             AS high_price_full
+        FROM prices
+        WHERE {' AND '.join(where)}
+        GROUP BY service_key
+        ORDER BY providers DESC
+        LIMIT {int(limit)}
+    """, params)
+
+
 @app.get("/api/services")
 def services(
     q_: str = Query("", alias="q", description="free-text procedure search"),
@@ -506,45 +787,68 @@ def services(
     # it, a $280 professional read and a $1,592 facility charge for the same
     # service get averaged and ranged together, which is not a price anyone
     # is quoted for anything.
-    where = ["is_primary"]
-    params: list[Any] = []
-    if q_:
-        # Tokenise. Matching the raw phrase as one substring meant "mri knee"
-        # found nothing, because the service is named "MRI - knee" and the
-        # punctuation sits between the words. Every token must appear
-        # somewhere in the name or the synonyms, in any order.
-        #
-        # search_terms carries the synonyms the catalog was built with, so
-        # "scan" finds imaging and "xray" finds "X-ray" without the UI knowing.
-        for tok in q_.lower().split():
-            where.append("(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)")
-            params += [f"%{tok}%", f"%{tok}%"]
+    base_where = ["is_primary"]
+    base_params: list[Any] = []
     if category:
-        where.append("category = ?")
-        params.append(category)
+        base_where.append("category = ?")
+        base_params.append(category)
     if categories:
         cat_list = [c.strip() for c in categories.split(",") if c.strip()]
-        where.append(f"category IN ({','.join(['?'] * len(cat_list))})")
-        params += cat_list
+        base_where.append(f"category IN ({','.join(['?'] * len(cat_list))})")
+        base_params += cat_list
     if keys:
         key_list = [k.strip() for k in keys.split(",") if k.strip()]
-        where.append(f"service_key IN ({','.join(['?'] * len(key_list))})")
-        params += key_list
+        base_where.append(f"service_key IN ({','.join(['?'] * len(key_list))})")
+        base_params += key_list
 
-    # low_price/high_price use the 5th/95th percentile, not true min/max. A
-    # blanket network contract can leave a grocery-store pharmacy with a
-    # $0.01 "rate" for an MRI it will never actually perform — real data, but
-    # not a price anyone is quoted, and evidence tagging alone doesn't catch
-    # every case (some of these are tagged peer_family, not just unknown).
-    # Individual providers still show their own real rate untouched in
-    # /providers; this only keeps one bad row from setting the headline range
-    # everyone sees first.
-    #
-    # low_price_full/high_price_full are the true min/max of the same group —
-    # not hidden, just not the headline. The UI shows low_price/high_price as
-    # "typical price range" and surfaces the full pair on demand, so a $0.01
-    # blanket-contract row is still reachable, never erased.
-    return {"query": q_, "results": q(f"""
+    if not q_:
+        return {"query": q_, "results": _services_rows(base_where, base_params, limit)}
+
+    tokens = _search_tokens(q_)
+    if not tokens:
+        return {"query": q_, "results": _services_rows(base_where, base_params, limit)}
+
+    # Pass 1: every token must appear somewhere in the name or the synonyms,
+    # in any order — same strict matching this endpoint always used, so an
+    # exact search like "knee mri" is unaffected by anything below.
+    and_where = list(base_where)
+    and_params = list(base_params)
+    for tok in tokens:
+        and_where.append("(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)")
+        and_params += [f"%{tok}%", f"%{tok}%"]
+    rows = _services_rows(and_where, and_params, limit)
+    if rows:
+        return {"query": q_, "results": rows}
+
+    # Pass 2: only on a genuine zero-result miss, loosen to ANY token
+    # matching. This is what turns "my knee hurts when climbing stairs" (all-
+    # stopword-or-unmatched except the symptom-expanded "knee"/"hip") into
+    # real results instead of an empty page — without ever weakening a
+    # search that pass 1 already satisfied. See _loose_match_tokens() for
+    # why this is a shorter list than pass 1's, and why it's still LIKE
+    # rather than a word-boundary regex.
+    loose_tokens = _loose_match_tokens(q_, tokens)
+    if not loose_tokens:
+        return {"query": q_, "results": []}
+    or_where = list(base_where)
+    or_params = list(base_params)
+    or_clause = " OR ".join(
+        "(lower(display_name) LIKE ? OR lower(search_terms) LIKE ?)"
+        for _ in loose_tokens
+    )
+    or_where.append(f"({or_clause})")
+    for tok in loose_tokens:
+        or_params += [f"%{tok}%", f"%{tok}%"]
+    return {"query": q_, "results": _services_rows(or_where, or_params, limit)}
+
+
+def _services_by_keys(keys: list[str]) -> dict[str, dict]:
+    """Same aggregation/shape as services() above, but keyed by service_key
+    and unordered — the caller decides ordering. Used by ai_search() to turn
+    a short list of AI-picked keys into real, priced result rows."""
+    if not keys:
+        return {}
+    rows = q(f"""
         SELECT service_key,
                any_value(display_name)      AS display_name,
                any_value(category)          AS category,
@@ -555,11 +859,149 @@ def services(
                min(median_rate)             AS low_price_full,
                max(median_rate)             AS high_price_full
         FROM prices
-        WHERE {' AND '.join(where)}
+        WHERE is_primary AND service_key IN ({','.join(['?'] * len(keys))})
         GROUP BY service_key
-        ORDER BY providers DESC
-        LIMIT {int(limit)}
-    """, params)}
+    """, keys)
+    return {r["service_key"]: r for r in rows}
+
+
+# ---- AI-assisted search (fallback only, never touches normal search) -----
+# Whole feature is off by default (ANTHROPIC_API_KEY empty) and fails soft —
+# every error path returns HTTP 200 with an empty result list, never a 5xx,
+# because a flaky third-party call must never make the site look broken.
+
+_catalog_cache: dict[str, Any] | None = None
+
+
+def _catalog() -> dict[str, Any]:
+    """Built once per process — the catalog only changes on redeploy. Returns
+    the prompt text (one line per real service) and the set of valid keys,
+    which is what every AI answer gets checked against before it can become
+    a result the user sees."""
+    global _catalog_cache
+    if _catalog_cache is None:
+        rows = q("""
+            SELECT service_key,
+                   any_value(display_name) AS display_name,
+                   any_value(category)     AS category
+            FROM prices WHERE is_primary
+            GROUP BY service_key ORDER BY service_key
+        """)
+        lines = [f"{r['service_key']} | {r['display_name']} | {r['category']}" for r in rows]
+        _catalog_cache = {"text": "\n".join(lines), "keys": {r["service_key"] for r in rows}}
+    return _catalog_cache
+
+
+_MATCH_TOOL = {
+    "name": "match_services",
+    "description": "Return the service_key values from the catalog that best match the patient's description, best match first.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "service_keys": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 5,
+                "description": "0 to 5 service_key values, copied EXACTLY from the catalog list. Empty if nothing plausibly matches.",
+            }
+        },
+        "required": ["service_keys"],
+    },
+}
+
+_AI_SYSTEM_PROMPT = """You match a patient's plain-language description of \
+their situation to entries in a fixed catalog of priced medical procedures.
+
+Rules:
+- Only ever choose service_key values that appear in the catalog below, \
+copied character-for-character.
+- Order your answer best match first.
+- If nothing in the catalog plausibly matches, return an empty list. Never \
+guess or pick something loosely related just to return a non-empty answer.
+- This is catalog lookup only. Never give medical advice, a diagnosis, or \
+any medical opinion — only ever call the match_services tool.
+
+Catalog (service_key | display name | category):
+{catalog}"""
+
+# Single uvicorn worker (see the __main__ block at the bottom of this file —
+# no `workers=` argument), so this in-process dict is safe: there's exactly
+# one process ever touching it. Not durable across a restart, and wouldn't
+# be safe if this ever ran with multiple workers — fine for a single $6/mo
+# container, revisit if that changes.
+_rate_state: dict[str, list[float]] = {}
+
+
+def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
+    now = time.time()
+    hits = [t for t in _rate_state.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(429, "Too many AI search requests — try again in a minute.")
+    hits.append(now)
+    _rate_state[ip] = hits
+
+
+class AISearchBody(BaseModel):
+    query: str = Field(..., min_length=3, max_length=300)
+
+
+@app.post("/api/services/ai-search")
+def ai_search(body: AISearchBody, request: Request):
+    """Fallback for when normal keyword search (GET /api/services) already
+    came back empty. Takes a free-text description, asks an LLM to match it
+    against the real catalog, and returns only entries that survive being
+    checked against that catalog — the model's raw text is never shown to
+    the user, so it structurally cannot hand back medical advice or a
+    hallucinated result: the response is either a real, priced service or
+    nothing."""
+    if not ANTHROPIC_API_KEY:
+        return {"query": body.query, "enabled": False, "matched_keys": [], "results": [], "error": None}
+
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
+    catalog = _catalog()
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=8.0)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            system=[
+                {
+                    "type": "text",
+                    "text": _AI_SYSTEM_PROMPT.format(catalog=catalog["text"]),
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            tools=[_MATCH_TOOL],
+            tool_choice={"type": "tool", "name": "match_services"},
+            messages=[{"role": "user", "content": body.query}],
+        )
+        raw_keys: list[str] = []
+        for block in resp.content:
+            if block.type == "tool_use" and block.name == "match_services":
+                raw_keys = list(block.input.get("service_keys", []))
+                break
+        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} "
+              f"raw_matches={len(raw_keys)} "
+              f"usage={getattr(resp, 'usage', None)}")
+    except Exception as e:  # noqa: BLE001 — any failure here must fail soft
+        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} error={type(e).__name__}")
+        return {"query": body.query, "enabled": True, "matched_keys": [], "results": [],
+                "error": "ai_unavailable"}
+
+    # Hallucination guard: never trust the model's raw output. Anything not
+    # in the real catalog is silently dropped, not surfaced as an error —
+    # a model choosing zero valid keys just means no confident match.
+    valid_keys = [k for k in raw_keys if k in catalog["keys"]]
+    rows_by_key = _services_by_keys(valid_keys)
+    # Preserve the model's best-match-first ordering, not provider count —
+    # over 5 candidates the model's relevance judgement is more meaningful
+    # than which one happens to have more billing volume.
+    results = [rows_by_key[k] for k in valid_keys if k in rows_by_key]
+
+    return {"query": body.query, "enabled": True, "matched_keys": valid_keys,
+            "results": results, "error": None}
 
 
 @app.get("/api/categories")
@@ -1287,11 +1729,30 @@ if DIST.exists():
         candidate = DIST / full_path
         if candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(DIST / "index.html")
+        # index.html: always revalidate. Its URL never changes between
+        # deploys but its content (which JS/CSS bundle it points to) does,
+        # so caching it is what let a stale build linger after a deploy
+        # (observed in production 2026-09-10, fixed by this header).
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 if __name__ == "__main__":
     import uvicorn
+    if SLICE.exists():
+        # Materialize `prices` (and the small provider views) before uvicorn
+        # starts accepting connections, rather than lazily on whichever
+        # request happens to arrive first. On the production droplet this
+        # build takes ~3 minutes (single weak vCPU) and holds q()'s shared
+        # lock the whole time — lazy meant the first real visitor's request
+        # after any restart just hung for 3 minutes with every other
+        # concurrent request queued behind it. Building here instead means
+        # a request that arrives during that window gets connection-refused
+        # (nothing listening yet) rather than hanging — a bounded, standard
+        # failure any client already knows how to retry, instead of a
+        # timeout no one can distinguish from the server being broken.
+        # Skipped when SLICE is absent so local dev without the data
+        # mounted still starts up and hits the normal 503 lazily, as before.
+        db()
     host = os.environ.get("STARKWELL_HOST", "127.0.0.1")
     port = int(os.environ.get("STARKWELL_PORT", "8001"))
     uvicorn.run(app, host=host, port=port, log_level="info")

@@ -27,7 +27,7 @@ const LINKS: NavLink[] = [
   { label: "Utah Hub", to: "/utah" },
   { label: "About", to: "/about" },
   { label: "Trust & Safety", to: "/trust" },
-  { label: "Help" },
+  { label: "Help", to: "/help" },
 ];
 
 interface Props {

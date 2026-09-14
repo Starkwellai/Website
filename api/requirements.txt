@@ -1,3 +1,4 @@
 fastapi==0.139.0
 uvicorn[standard]==0.50.2
 duckdb==1.5.4
+anthropic==1.5.0
