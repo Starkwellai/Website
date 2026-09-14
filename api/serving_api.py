@@ -1738,6 +1738,21 @@ if DIST.exists():
 
 if __name__ == "__main__":
     import uvicorn
+    if SLICE.exists():
+        # Materialize `prices` (and the small provider views) before uvicorn
+        # starts accepting connections, rather than lazily on whichever
+        # request happens to arrive first. On the production droplet this
+        # build takes ~3 minutes (single weak vCPU) and holds q()'s shared
+        # lock the whole time — lazy meant the first real visitor's request
+        # after any restart just hung for 3 minutes with every other
+        # concurrent request queued behind it. Building here instead means
+        # a request that arrives during that window gets connection-refused
+        # (nothing listening yet) rather than hanging — a bounded, standard
+        # failure any client already knows how to retry, instead of a
+        # timeout no one can distinguish from the server being broken.
+        # Skipped when SLICE is absent so local dev without the data
+        # mounted still starts up and hits the normal 503 lazily, as before.
+        db()
     host = os.environ.get("STARKWELL_HOST", "127.0.0.1")
     port = int(os.environ.get("STARKWELL_PORT", "8001"))
     uvicorn.run(app, host=host, port=port, log_level="info")
