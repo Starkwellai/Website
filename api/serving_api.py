@@ -466,10 +466,22 @@ def db() -> duckdb.DuckDBPyConnection:
         # Filtering here rather than in the parquet keeps the slice intact for
         # any future multi-state use, and costs one join against a 4.5 MB file.
         # The proper home for this is build_serving.py; see the note there.
+        #
+        # TABLE, not VIEW: a view is just a stored query — DuckDB re-runs the
+        # full 452MB parquet scan + join on EVERY query that touches `prices`,
+        # which is every search, every health check, every provider lookup.
+        # On the production droplet's single weak vCPU that was ~7s per
+        # request, serialized (single uvicorn worker), so two visitors
+        # searching a few seconds apart queue up behind each other. TABLE
+        # pays that cost once, here, at container startup — after which
+        # every query just scans an already-materialized in-memory table.
+        # There's no refresh path that expects `prices` to reflect a changed
+        # parquet without a restart (see db()'s _con caching above), so nothing
+        # else in this file needs to change for this to be safe.
         providers = PROVIDERS
         if providers.exists():
             _con.execute(f"""
-                CREATE VIEW prices AS
+                CREATE TABLE prices AS
                 SELECT s.* FROM read_parquet('{SLICE.as_posix()}') s
                 JOIN (SELECT DISTINCT CAST(npi AS VARCHAR) AS npi
                       FROM read_parquet('{providers.as_posix()}')
@@ -477,7 +489,7 @@ def db() -> duckdb.DuckDBPyConnection:
                   ON u.npi = CAST(s.npi AS VARCHAR)
             """)
         else:
-            _con.execute(f"CREATE VIEW prices AS "
+            _con.execute(f"CREATE TABLE prices AS "
                          f"SELECT * FROM read_parquet('{SLICE.as_posix()}')")
         _build_system_view(_con)
         _build_org_view(_con)
