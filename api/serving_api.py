@@ -43,6 +43,7 @@ Run:
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -445,16 +446,48 @@ def _build_specialty_view(con: duckdb.DuckDBPyConnection) -> None:
     """)
 
 
+# Where the materialized `prices` table lives — see db() below. Inside the
+# container's own ephemeral layer (not a mounted volume), so a fresh `docker
+# run` always starts clean. An in-place `docker restart` (which is what
+# `--restart unless-stopped` does after a crash) reuses that same layer, so
+# db() deletes any leftover file here before rebuilding — see the OOM note.
+DUCKDB_FILE = Path(os.environ.get("STARKWELL_DUCKDB_FILE", "/tmp/starkwell_cache.duckdb"))
+DUCKDB_SPILL_DIR = Path(os.environ.get("STARKWELL_DUCKDB_SPILL", "/tmp/starkwell_spill"))
+
+
 def db() -> duckdb.DuckDBPyConnection:
     global _con
     if _con is None:
         if not SLICE.exists():
             raise HTTPException(503, f"serving slice not found: {SLICE}")
-        # Small limits on purpose: this runs alongside a 24 GB rebuild.
-        _con = duckdb.connect()
+        # File-backed, not duckdb.connect() (in-memory) — the first version of
+        # this materialization used an in-memory table and OOM-killed the
+        # production droplet: the 452MB parquet's denormalized text columns
+        # (display_name/category/search_terms repeated across 21M rows)
+        # expand to 1GB+ resident once fully materialized, on a droplet with
+        # 1.9GB total RAM and no swap. A file-backed database plus a real
+        # memory_limit lets DuckDB spill the build to disk instead of
+        # requiring the whole thing resident in RAM — verified locally this
+        # keeps peak RSS under ~700MB while building the exact same table.
+        # Deleting any stale file first guards the crash-then-auto-restart
+        # case: `--restart unless-stopped` reuses the same container
+        # filesystem, so a file left over from an interrupted previous build
+        # must not be reopened as if it were complete.
+        if DUCKDB_FILE.exists():
+            DUCKDB_FILE.unlink()
+        if DUCKDB_SPILL_DIR.exists():
+            shutil.rmtree(DUCKDB_SPILL_DIR, ignore_errors=True)
+        DUCKDB_SPILL_DIR.mkdir(parents=True, exist_ok=True)
+        _con = duckdb.connect(database=str(DUCKDB_FILE))
         _con.execute("SET enable_progress_bar=false")
         _con.execute("SET threads=2")
-        _con.execute("SET memory_limit='2GB'")
+        # 500MB, not the old view-era '2GB' — this droplet only HAS 1.9GB
+        # total, so a duckdb-internal limit above that number was never a
+        # real ceiling. 500MB leaves headroom for the OS/uvicorn/Python
+        # overhead alongside it; temp_directory below is what lets a build
+        # that needs more than this spill to disk instead of OOMing.
+        _con.execute("SET memory_limit='500MB'")
+        _con.execute(f"SET temp_directory='{DUCKDB_SPILL_DIR.as_posix()}'")
         # UTAH ONLY. The serving slice is not state-filtered — build_serving.py
         # has no state predicate — so it carries 3,196 providers in other states
         # (WA 1,221, FL 236, TX 204, ID 158, AZ 145...), 460,139 rows, 7.2% of
@@ -474,10 +507,10 @@ def db() -> duckdb.DuckDBPyConnection:
         # request, serialized (single uvicorn worker), so two visitors
         # searching a few seconds apart queue up behind each other. TABLE
         # pays that cost once, here, at container startup — after which
-        # every query just scans an already-materialized in-memory table.
-        # There's no refresh path that expects `prices` to reflect a changed
-        # parquet without a restart (see db()'s _con caching above), so nothing
-        # else in this file needs to change for this to be safe.
+        # every query just scans an already-materialized table. There's no
+        # refresh path that expects `prices` to reflect a changed parquet
+        # without a restart (see db()'s _con caching above), so nothing else
+        # in this file needs to change for this to be safe.
         providers = PROVIDERS
         if providers.exists():
             _con.execute(f"""
