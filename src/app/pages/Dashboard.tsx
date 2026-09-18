@@ -162,7 +162,7 @@ export function Dashboard() {
             <img 
               src={logo} 
               alt="Starkwell" 
-              className="h-20 cursor-pointer rounded-[5px]"
+              className="h-12 cursor-pointer rounded-[5px]"
               onClick={() => navigate("/")}
             />
             <div className="flex items-center gap-4">

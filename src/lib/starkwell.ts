@@ -105,6 +105,11 @@ export interface ProviderPrice {
 export interface Facility {
   address: string;
   city: string;
+  /** Stable ID for this physical location, derived from its own
+   *  address+city — unlike facility_id, every location has one, not just
+   *  the ~1% of CMS-tracked hospitals. Pass it to getFacilityReviews()/
+   *  submitFacilityReview(). */
+  facility_key: string;
   /** CMS-verified facility name, from an exact address match. Null otherwise. */
   facility_name: string | null;
   /** Health system agreed by >=70% of organisations at this address, from a
@@ -214,6 +219,23 @@ export function facilityLabel(f: Facility): string {
   return f.address;
 }
 
+/** A Google Maps search for this facility — not a link to a specific,
+ *  pre-matched listing (see the facility_key/reviews work above for why we
+ *  deliberately don't attempt that kind of exact matching yet: ~11,800
+ *  distinct locations and no reliable free way to resolve each one to a
+ *  single Google place). This just hands Google the same name+address a
+ *  person would type themselves; Google's own search picks the listing,
+ *  same as if the visitor searched directly. No API key, no account, no
+ *  cost — this is a plain, documented Google Maps URL, not a billed API. */
+export function googleMapsSearchUrl(f: Facility): string {
+  // facilityLabel() can return UI-only text ("Likely: ...") that would
+  // pollute the search — same name priority, but the clean underlying
+  // value each time.
+  const name = f.facility_name || f.system || f.org || null;
+  const query = name ? `${name} ${f.address} ${f.city} UT` : `${f.address} ${f.city} UT`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 /** A selectable insurance plan, from the CMS marketplace filings. */
 export interface Plan {
   plan_id: string;
@@ -298,6 +320,56 @@ export async function getFacilityQuality(facilityId: string): Promise<QualityMea
     // physician offices (only the 102 tracked hospitals/ASCs have any),
     // not an error worth surfacing.
     return [];
+  }
+}
+
+/** One review, tagged by where it came from. "starkwell" is written by a
+ *  site visitor through submitFacilityReview() below; other sources (e.g.
+ *  "google", once that's built) are pulled in separately — never averaged
+ *  together with Starkwell's own, always shown and labeled apart. */
+export interface Review {
+  source: string;
+  rating: number;
+  comment: string | null;
+  author_name: string | null;
+  created_at: string;
+}
+
+export interface ReviewSourceSummary {
+  average: number;
+  count: number;
+}
+
+export interface FacilityReviews {
+  facility_key: string;
+  /** Keyed by source ("starkwell", eventually "google", …) — absent key
+   *  means zero reviews from that source, not a zero rating. */
+  sources: Record<string, ReviewSourceSummary>;
+  reviews: Review[];
+}
+
+export async function getFacilityReviews(facilityKey: string): Promise<FacilityReviews> {
+  return get<FacilityReviews>(`/facilities/${encodeURIComponent(facilityKey)}/reviews`);
+}
+
+/** Posts a Starkwell-authored review. Open to any visitor — there's no
+ *  account system anywhere on this site — so the only real safeguard is
+ *  the server's own rate limit (a 429 here means "try again later", not a
+ *  bug). Throws with the server's own message on rejection (429 for the
+ *  rate limit, 422 for an out-of-range rating). */
+export async function submitFacilityReview(facilityKey: string, review: {
+  rating: number;
+  comment?: string;
+  author_name?: string;
+}): Promise<void> {
+  const res = await fetch(`${BASE}/facilities/${encodeURIComponent(facilityKey)}/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(review),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail.slice(0, 160)}` : ""}`);
   }
 }
 

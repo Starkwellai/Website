@@ -50,6 +50,24 @@ image's layer history) — it lives in a file only on the droplet, injected at
    this file, the feature just stays off (`enabled: false` in the API
    response) rather than failing; nothing else about the site needs it.
 
+## 2b. One-time: persistent data directory
+
+Everything inside the container is wiped on every `docker rm` (every
+redeploy, every rollback) — until 2026-09-17, that included absolutely
+everything the app ever wrote, because nothing was ever mounted from the
+host. The first thing that actually needed to survive a redeploy was
+zero-result search logging (see `api/serving_api.py`'s `_log_search_miss`),
+so this now exists and every `docker run` below mounts it in:
+```bash
+mkdir -p /root/starkwell-data
+```
+`-v /root/starkwell-data:/app/data-writable` maps that host directory into
+the container at `/app/data-writable`. Anything the app needs to persist
+long-term (this search-miss log now, a future reviews table, etc.) goes
+there, never in the container's own writable layer or in `/tmp` (which is
+still fine for the ephemeral DuckDB query cache — that's *supposed* to reset
+on every restart, see `db()`).
+
 ## 3. What happens next (for reference — I'll run these)
 
 ```bash
@@ -60,20 +78,57 @@ tar --exclude node_modules --exclude dist --exclude .git --exclude utah_pricing 
     --exclude '*.make' --exclude '*.zip' -czf /tmp/starkwell.tar.gz .
 scp -i ~/.ssh/starkwell_deploy /tmp/starkwell.tar.gz root@<DROPLET_IP>:/root/
 
-# On the droplet: unpack, build, tag the outgoing image as a rollback point,
-# swap the container in
+# On the droplet: unpack and build
 ssh -i ~/.ssh/starkwell_deploy root@<DROPLET_IP> \
   "mkdir -p /root/starkwell && tar -xzf /root/starkwell.tar.gz -C /root/starkwell && \
-   cd /root/starkwell && docker build -t starkwell:new . && \
-   docker tag starkwell:latest starkwell:rollback-\$(date +%Y%m%d-%H%M) && \
-   docker rm -f starkwell && \
-   docker run -d --name starkwell --restart unless-stopped -p 80:8080 --memory=1400m \
-     --env-file /root/starkwell.env starkwell:new && \
-   docker tag starkwell:new starkwell:latest"
+   cd /root/starkwell && docker build -t starkwell:new ."
 ```
 
+Then run `deploy/swap.sh` (below) over SSH to actually put the new image live.
+
+**Why a separate swap step, not just `docker rm -f` then `docker run`**: that
+straight-line sequence has a real failure mode — found the hard way on
+2026-09-16, when a redeploy's `docker run` failed (`--env-file` pointed at a
+`/root/starkwell.env` that didn't exist on this droplet) *after* the old
+container had already been removed, leaving the site down with nothing
+running until someone noticed and started a container by hand. The image
+itself was fine; the failure was purely in the handoff between old and new.
+`swap.sh` starts the new image as a throwaway container on a side port
+first, waits for it to actually answer `/api/health`, and only *then* touches
+the live container on port 80 — so a bad image, a missing env file, or any
+other startup failure aborts with the old container still running,
+untouched, instead of taking the site down.
+
+The script itself lives at `deploy/swap.sh` (copy it to the droplet once,
+alongside the repo, at `/root/starkwell/deploy/swap.sh`) rather than being
+duplicated here — a copy inline in this doc would inevitably drift out of
+sync with the real file. Run it as `bash deploy/swap.sh` from `/root/starkwell`
+after `docker build`.
+
+**2026-09-16 addendum, after a second incident the same night**: the first
+version of `swap.sh` ran the canary at the *same* `--memory=1400m` cap
+alongside the still-running production container — on this droplet's ~1.9GB
+of RAM, two containers each capable of using up to 1.4GB is more than the
+box has, and it briefly froze the whole machine (SSH included) exactly like
+the 2026-09-14 OOM incident below, before `--restart unless-stopped`
+recovered the production container on its own once the overload passed. The
+fix wasn't rewriting the swap logic — running two copies briefly during a
+deploy is inherently going to spike memory on a box this size no matter how
+it's sequenced — it was giving the droplet **2GB of swap** (there was
+none configured before):
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab   # persists across reboots
+```
+This is standard practice for small-memory cloud instances specifically for
+this scenario: a transient memory spike now pages to disk (slower, but
+survivable) instead of triggering the kernel OOM killer and freezing the
+box. If this droplet is ever recreated from scratch, redo this step before
+running `swap.sh` for the first time.
+
 That's it — `http://<DROPLET_IP>` is then a working public link. Two things
-worth knowing about what happens after `docker run`, both added 2026-09-14:
+worth knowing about what `swap.sh` is protecting against, both added
+2026-09-14 (the memory cap) and still true after the 2026-09-16 rewrite above:
 
 - **`--memory=1400m` is a hard safety cap**, not a tuning knob to raise
   casually. `api/serving_api.py`'s `prices` table is built once at process
@@ -86,18 +141,19 @@ worth knowing about what happens after `docker run`, both added 2026-09-14:
   `--restart unless-stopped`, not the whole droplet. Verified peak usage is
   ~650-700 MB; 1400m leaves real headroom without being so loose it stops
   protecting anything.
-- **The site is unreachable for ~2-3 minutes after every container start**
-  (a fresh deploy, or an automatic restart after a crash) — before it starts
+- **Every container takes ~2-3 minutes to start answering requests** (a
+  fresh deploy, or an automatic restart after a crash) — before it starts
   listening at all, `serving_api.py` builds that same materialized table,
   which takes that long on this droplet's single weak vCPU (~30 seconds on a
   normal dev machine). A request during that window gets connection-refused
   immediately rather than hanging, which is deliberate — see the comment
-  above `if __name__ == "__main__":` in `serving_api.py` — but it does mean
-  **do not consider a deploy finished at the moment `docker run` returns**.
-  Poll until it actually answers before telling anyone the site is back:
-  ```bash
-  until curl -sf http://<DROPLET_IP>/api/health >/dev/null; do sleep 10; done
-  ```
+  above `if __name__ == "__main__":` in `serving_api.py`. This is exactly
+  why `swap.sh` polls the *canary's* health endpoint before touching
+  production instead of assuming `docker run` returning means the app is
+  up — the process was previously **do not consider a deploy finished at
+  the moment `docker run` returns, poll `/api/health` yourself**; `swap.sh`
+  now does that polling as part of the swap itself, on both the canary and
+  the final production container.
 
 **Quick backend-only redeploy**: for a change to `api/serving_api.py` alone
 (no new data, no frontend change), skip the full tar/scp — `/root/starkwell`
@@ -107,7 +163,7 @@ several:
 ```bash
 scp -i ~/.ssh/starkwell_deploy api/serving_api.py root@<DROPLET_IP>:/root/starkwell/api/serving_api.py
 ssh -i ~/.ssh/starkwell_deploy root@<DROPLET_IP> "cd /root/starkwell && docker build -t starkwell:new ."
-# then the same tag-rollback / rm / run / tag-latest sequence as above
+# then run deploy/swap.sh on the droplet, same as a full deploy
 ```
 
 ## 4. Rolling back
@@ -119,7 +175,8 @@ an older tag instead of `starkwell:latest`:
 docker images | grep starkwell   # find the rollback tag to use
 docker rm -f starkwell
 docker run -d --name starkwell --restart unless-stopped -p 80:8080 --memory=1400m \
-  --env-file /root/starkwell.env starkwell:rollback-<timestamp>
+  --env-file /root/starkwell.env \
+  -v /root/starkwell-data:/app/data-writable starkwell:rollback-<timestamp>
 ```
 This is also the fix for the 2026-09-14 outage described above: the bad
 image was never re-tagged as `:latest`, so `starkwell:latest` still pointed

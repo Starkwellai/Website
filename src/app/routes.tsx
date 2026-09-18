@@ -17,6 +17,8 @@ import { About } from "./pages/About";
 import { Utah } from "./pages/Utah";
 import { NotFound } from "./pages/NotFound";
 import { PriceSearch } from "./pages/PriceSearch";
+import { NewPatientGuide } from "./pages/NewPatientGuide";
+import { SavedItems } from "./pages/SavedItems";
 import { Profile } from "./pages/Profile";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { AuditLog } from "./pages/AuditLog";
@@ -98,6 +100,14 @@ export const router = createBrowserRouter([
   {
     path: "/help",
     element: <Help />,
+  },
+  {
+    path: "/new-patient-guide",
+    element: <NewPatientGuide />,
+  },
+  {
+    path: "/saved",
+    element: <SavedItems />,
   },
   {
     path: "/about",

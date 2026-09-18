@@ -36,7 +36,7 @@ export function OnboardingLayout({ children, currentStep, totalSteps, onBack }: 
               <img 
                 src={logo} 
                 alt="Starkwell" 
-                className="h-20 cursor-pointer rounded-[5px]"
+                className="h-12 cursor-pointer rounded-[5px]"
                 onClick={() => navigate("/")}
               />
             </div>

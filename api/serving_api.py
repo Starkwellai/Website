@@ -42,10 +42,16 @@ Run:
 
 from __future__ import annotations
 
+import difflib
+import hashlib
+import json
 import os
+import re
 import shutil
+import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -186,6 +192,19 @@ def norm_addr(col: str) -> str:
     for pat, rep in _SUBS:
         e = f"regexp_replace({e}, '{pat}', '{rep}', 'g')"
     return f"regexp_replace({e}, '\\s+', ' ', 'g')"
+
+
+def _facility_key(address: str, city: str) -> str:
+    """Stable ID for one physical location, derived purely from its own
+    (already upper/trimmed) address+city — never from Google or the CMS
+    facility list. Only ~1% of locations have a real facility_id (see
+    facility_rows()'s docstring), and reviews need to work for the other
+    99% just as well, so this is deliberately independent of either. The
+    same two facility_rows() results for the same address always hash to
+    the same key regardless of which service page they were reached
+    from, which is what lets reviews for one hospital aggregate correctly
+    across every one of the 705 services it happens to offer."""
+    return hashlib.sha256(f"{address}|{city}".encode()).hexdigest()[:16]
 
 # Allow-listed ORDER BY clauses. The sort key is validated by the route's regex
 # and then looked up here, so no user string ever reaches the SQL text.
@@ -604,8 +623,8 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "ankle pain": ["ankle"],
     "twisted my ankle": ["ankle", "xray"],
     "sprained my ankle": ["ankle", "xray"],
-    "think i broke": ["xray", "fracture"],
-    "might be broken": ["xray", "fracture"],
+    "think i broke": ["xray", "fracture", "cast or splint"],
+    "might be broken": ["xray", "fracture", "cast or splint"],
     "popping sound": ["joint", "mri"],
     "clicking sound": ["joint", "mri"],
 
@@ -615,7 +634,7 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "racing heart": ["heart", "ekg", "holter"],
     "heart racing": ["heart", "ekg", "holter"],
     "heart palpitations": ["heart", "ekg", "holter"],
-    "irregular heartbeat": ["heart", "ekg", "holter"],
+    "irregular heartbeat": ["heart", "ekg", "holter", "rhythm ecg strip"],
     "skipping beats": ["heart", "holter"],
     "high blood pressure": ["blood pressure", "cardiac"],
 
@@ -626,7 +645,7 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "can't breathe": ["breathing", "spirometry"],
     "wheezing": ["breathing", "spirometry", "asthma"],
     "constant cough": ["chest", "xray", "pulmonology"],
-    "coughing up blood": ["chest", "pulmonology"],
+    "coughing up blood": ["chest", "pulmonology", "bronchoscopy"],
 
     # gastrointestinal
     "stomach pain": ["abdominal", "abdomen"],
@@ -637,7 +656,7 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "cant keep food down": ["abdominal", "endoscopy"],
     "blood in my stool": ["colonoscopy", "fecal"],
     "blood in stool": ["colonoscopy", "fecal"],
-    "trouble swallowing": ["swallowing", "esophageal"],
+    "trouble swallowing": ["swallowing", "esophageal", "barium swallow"],
 
     # urinary / kidney
     "burning when i pee": ["urine", "urinalysis"],
@@ -676,8 +695,13 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "sore throat": ["throat", "strep"],
     "stuffy nose": ["sinus", "nasal"],
     "sinus pressure": ["sinus"],
-    "ear hurts": ["ear"],
-    "earache": ["ear"],
+    # "ear" alone is too dangerous a token for pass 2's OR match -- it's a
+    # literal substring of "hEARt" and "wEARable" (see "Echocardiogram",
+    # "Extended cardiac monitor (wEARable/telemetry)"), so a bare mapping
+    # was pulling cardiac equipment into every ear-pain search. Naming the
+    # actual ear procedures instead avoids that without losing the match.
+    "ear hurts": ["ear exam", "ear wax", "ear tube"],
+    "earache": ["ear exam", "ear wax"],
 
     # skin
     "weird mole": ["skin", "mole"],
@@ -693,7 +717,732 @@ _SYMPTOM_EXPANSIONS: dict[str, list[str]] = {
     "cant lose weight": ["thyroid"],
     "blurry vision": ["eye"],
     "eye hurts": ["eye"],
+
+    # dental
+    "toothache": ["dental", "tooth"],
+    "tooth hurts": ["dental", "tooth"],
+    "tooth pain": ["dental", "tooth"],
+    "cavity": ["cavity", "filling"],
+    "cavities": ["cavity", "filling"],
+    "wisdom teeth": ["tooth", "extraction"],
+    "wisdom tooth": ["tooth", "extraction"],
+    "teeth cleaning": ["cleaning", "dental"],
+    "tooth cleaning": ["cleaning", "dental"],
+    "chipped tooth": ["tooth", "crown"],
+    "cracked tooth": ["tooth", "crown"],
+    "broken tooth": ["tooth", "crown"],
+    "braces": ["orthodontic"],
+    "need braces": ["orthodontic"],
+    "invisalign": ["orthodontic"],
+    "gum disease": ["periodontal", "gum"],
+    "bleeding gums": ["periodontal", "gum"],
+    "sore gums": ["periodontal", "gum"],
+    "loose tooth": ["tooth", "extraction"],
+    "missing tooth": ["implant", "denture"],
+    "need dentures": ["denture"],
+    "need a crown": ["crown"],
+    "jaw pain": ["tmj"],
+    "jaw clicking": ["tmj"],
+    "grinding my teeth": ["night guard"],
+    "grind my teeth": ["night guard"],
+
+    # vision
+    "need glasses": ["glasses", "refraction"],
+    "need new glasses": ["glasses", "refraction"],
+    "vision changed": ["eye exam", "refraction"],
+    "trouble seeing": ["eye exam", "refraction"],
+    "contact lenses": ["contact lens"],
+    "need contacts": ["contact lens"],
+    "dry eyes": ["dry eye", "punctal"],
+    "eye is red": ["eye exam"],
+    "cataracts": ["cataract"],
+    "cloudy vision": ["cataract", "yag laser"],
+    "floaters": ["retinal", "eye exam"],
+    "glaucoma": ["glaucoma"],
+
+    # women's health / birth control
+    "birth control": ["iud", "contraceptive"],
+    "need an iud": ["iud"],
+    "std test": ["sti"],
+    "std testing": ["sti"],
+    "sti test": ["sti"],
+    "get tested for stds": ["sti"],
+    "get tested for stis": ["sti"],
+    "pap smear": ["pap smear"],
+    "annual exam": ["wellness exam", "pap smear"],
+    "well woman exam": ["wellness exam", "pap smear"],
+    "fertility testing": ["fertility", "fsh", "semen analysis"],
+    "trying to get pregnant": ["fertility", "fsh"],
+    "menopause": ["hormone", "estradiol"],
+    "hot flashes": ["hormone", "estradiol"],
+    "heavy periods": ["ultrasound", "pelvic"],
+    "irregular periods": ["hormone", "ultrasound"],
+    "vasectomy reversal": ["vasectomy reversal"],
+    "want a vasectomy": ["vasectomy"],
+    "tubes tied": ["tubal ligation"],
+
+    # pediatrics / vaccines
+    "vaccine": ["vaccine"],
+    "vaccines": ["vaccine"],
+    "shots for school": ["vaccine", "immunization"],
+    "flu shot": ["flu shot"],
+    "flu vaccine": ["flu shot"],
+    "covid shot": ["covid-19 vaccine"],
+    "covid vaccine": ["covid-19 vaccine"],
+    "covid test": ["covid-19 test"],
+    "shingles shot": ["shingles vaccine"],
+    "tetanus shot": ["tdap", "tetanus"],
+    "well baby visit": ["well-child"],
+    "well child visit": ["well-child"],
+    "baby checkup": ["well-child"],
+    "circumcision": ["circumcision"],
+    "tongue tie": ["tongue-tie", "frenotomy", "frenectomy"],
+
+    # preventive / general checkup
+    "annual physical": ["annual physical", "wellness exam"],
+    "yearly physical": ["annual physical", "wellness exam"],
+    "yearly checkup": ["annual physical", "wellness exam"],
+    "sports physical": ["physical"],
+    "school physical": ["physical"],
+    "physical exam": ["physical", "wellness exam"],
+    "cholesterol check": ["cholesterol"],
+    "high cholesterol": ["cholesterol"],
+    "diabetes test": ["a1c", "glucose"],
+    "check my blood sugar": ["a1c", "glucose"],
+    "prediabetes": ["a1c", "glucose"],
+
+    # prostate / urology
+    "enlarged prostate": ["prostate"],
+    "bph": ["prostate"],
+    "prostate check": ["psa", "prostate"],
+    "erectile dysfunction": ["ed injection", "penile"],
+    "cant get an erection": ["ed injection", "penile"],
+    "kidney stone": ["kidney stone"],
+    "passing a kidney stone": ["kidney stone"],
+
+    # common surgical/procedure needs
+    "hernia": ["hernia"],
+    "hernia pain": ["hernia"],
+    "gallbladder pain": ["gallbladder"],
+    "gallstones": ["gallbladder", "ercp"],
+    "varicose veins": ["varicose vein"],
+    "spider veins": ["varicose vein", "sclerotherapy"],
+    "colon cancer screening": ["colonoscopy"],
+    "need a colonoscopy": ["colonoscopy"],
+    "tonsils": ["tonsil"],
+    "tonsillitis": ["tonsil"],
+    "carpal tunnel": ["carpal tunnel"],
+    "hand is numb": ["carpal tunnel", "emg"],
+    "fingers are numb": ["carpal tunnel", "emg"],
+    "need a hip replacement": ["hip replacement"],
+    "need a knee replacement": ["knee replacement"],
+    "joint replacement": ["replacement"],
+    "mole removal": ["mole"],
+    "skin tag": ["skin lesion", "mole"],
+    "wart removal": ["skin lesion", "destruction"],
+    "ingrown toenail": ["ingrown toenail"],
+    "bunion": ["bunion"],
+    "trigger finger": ["trigger finger"],
+    "weight loss surgery": ["gastric bypass", "sleeve gastrectomy"],
+    "bariatric surgery": ["gastric bypass", "sleeve gastrectomy"],
+    "hair loss": ["hair and scalp"],
+    "losing my hair": ["hair and scalp"],
+
+    # neuro / head
+    "concussion": ["mri - brain", "ct scan - head"],
+    "hit my head": ["mri - brain", "ct scan - head"],
+    "headaches": ["migraine"],
+    "bad headaches": ["migraine"],
+    "migraines": ["migraine"],
+    "seizure": ["eeg"],
+    "seizures": ["eeg"],
+    "memory loss": ["neuropsychological"],
+    "memory problems": ["neuropsychological"],
+    "forgetting things": ["neuropsychological"],
+    "numbness": ["emg", "nerve"],
+    "tingling": ["emg", "nerve"],
+    "pins and needles": ["emg", "nerve"],
+
+    # sleep
+    "snoring": ["sleep study", "cpap"],
+    "sleep apnea": ["sleep study", "cpap"],
+    "cant stay asleep": ["sleep study"],
+    "always tired during the day": ["sleep study"],
+
+    # therapy / rehab / alternative
+    "chiropractor": ["chiropractic"],
+    "back adjustment": ["chiropractic"],
+    "need physical therapy": ["physical therapy"],
+    "need pt": ["physical therapy"],
+    "occupational therapist": ["occupational therapy"],
+    "speech therapist": ["speech-language"],
+    "dietitian": ["nutrition"],
+    "nutritionist": ["nutrition"],
+    "diet help": ["nutrition"],
+
+    # mental health / substance use
+    "addiction help": ["substance use", "opioid use disorder"],
+    "substance abuse": ["substance use", "opioid use disorder"],
+    "drinking problem": ["substance use"],
+    "opioid addiction": ["opioid use disorder", "buprenorphine", "methadone"],
+    "adhd testing": ["neuropsychological", "adhd"],
+    "autism testing": ["autism"],
+    "autism evaluation": ["autism"],
+
+    # allergy
+    "allergic reaction": ["allergy"],
+    "seasonal allergies": ["allergy"],
+    "food allergy": ["allergy", "food challenge"],
+    "allergy shots": ["allergy shots"],
+    "peanut allergy": ["food challenge"],
+    "asthma triggers": ["bronchial challenge", "allergy"],
+
+    # imaging -- more body parts not already covered above
+    "elbow hurts": ["elbow"],
+    "elbow pain": ["elbow"],
+    "tennis elbow": ["elbow"],
+    "forearm hurts": ["forearm"],
+    "forearm pain": ["forearm"],
+    "hand hurts": ["hand"],
+    "hand pain": ["hand"],
+    "finger hurts": ["finger"],
+    "broke my finger": ["finger"],
+    "jammed my finger": ["finger"],
+    "foot hurts": ["foot"],
+    "foot pain": ["foot"],
+    "toe hurts": ["toe"],
+    "stubbed my toe": ["toe"],
+    "broke my toe": ["toe"],
+    "rib hurts": ["rib"],
+    "broken rib": ["rib"],
+    "cracked rib": ["rib"],
+    "collarbone hurts": ["collarbone"],
+    "broke my collarbone": ["collarbone"],
+    "thigh hurts": ["thigh"],
+    "thigh pain": ["thigh"],
+    "calf pain": ["lower leg"],
+    "shin pain": ["lower leg"],
+    "lower leg pain": ["lower leg"],
+    "tailbone hurts": ["tailbone"],
+    "fell on my tailbone": ["tailbone"],
+    "shoulder blade pain": ["shoulder blade"],
+    "scoliosis": ["scoliosis", "spine x-ray"],
+    "swollen lymph node": ["lymph node"],
+    "lump in my neck": ["lymph node", "thyroid"],
+
+    # circulation / vascular
+    "poor circulation": ["circulation", "vein ultrasound"],
+    "leg swelling": ["vein ultrasound", "leg circulation"],
+    "swollen legs": ["vein ultrasound", "leg circulation"],
+    "blood clot": ["d-dimer", "vein ultrasound"],
+    "deep vein thrombosis": ["vein ultrasound", "d-dimer"],
+    "dvt": ["vein ultrasound", "d-dimer"],
+    "leg pain when walking": ["leg circulation", "abi"],
+    "claudication": ["leg circulation", "abi"],
+    "aneurysm": ["aneurysm"],
+    "stroke risk": ["carotid"],
+    "carotid blockage": ["carotid"],
+
+    # breast / thyroid
+    "breast lump": ["breast"],
+    "lump in my breast": ["breast"],
+    "found a lump": ["breast", "biopsy"],
+    "family history of breast cancer": ["mammogram", "breast mri"],
+    "thyroid problems": ["thyroid"],
+    "swollen thyroid": ["thyroid"],
+    "thyroid nodule": ["thyroid"],
+    "thyroid removal": ["thyroidectomy"],
+    "parathyroid problems": ["parathyroid"],
+
+    # lab / blood work
+    "blood work": ["cbc", "metabolic panel"],
+    "get my blood tested": ["cbc", "metabolic panel"],
+    "anemia": ["iron", "cbc"],
+    "low iron": ["iron"],
+    "vitamin deficiency": ["vitamin"],
+    "low vitamin d": ["vitamin d"],
+    "b12 deficiency": ["vitamin b12"],
+    "liver problems": ["liver function"],
+    "kidney function test": ["kidney function"],
+    "kidney disease": ["kidney function"],
+    "check my hormones": ["hormone"],
+    "hormone imbalance": ["hormone"],
+    "low testosterone": ["testosterone"],
+    "clotting disorder": ["clotting", "coagulation"],
+    "blood thinner check": ["blood clotting", "coagulation"],
+    "std panel": ["sti"],
+    "hiv test": ["hiv"],
+    "hepatitis test": ["hepatitis"],
+    "mono": ["mono"],
+    "strep throat": ["strep"],
+    "tb test": ["tb"],
+    "drug test": ["drug testing"],
+    "genetic testing": ["genetic"],
+    "cancer marker test": ["tumor marker"],
+    "tumor marker": ["tumor marker"],
+    "inflammation test": ["inflammation"],
+    "autoimmune test": ["autoimmune", "rheumatoid"],
+    "lupus test": ["autoimmune", "rheumatoid"],
+    "rheumatoid arthritis test": ["rheumatoid"],
+    "fertility hormone test": ["fsh"],
+    "pregnancy blood test": ["pregnancy test", "obstetric"],
+
+    # cardiology
+    "heart murmur": ["cardiac", "echocardiogram"],
+    "pacemaker check": ["pacemaker"],
+    "need my pacemaker checked": ["pacemaker"],
+    "heart monitor": ["cardiac monitor", "holter"],
+    "blood thinner": ["blood thinner"],
+    "cardiac rehab": ["cardiac rehabilitation"],
+    "heart bypass": ["coronary bypass"],
+    "heart stent": ["coronary stent"],
+    "balloon angioplasty": ["coronary stent"],
+    "afib": ["cardiac ablation"],
+    "atrial fibrillation": ["cardiac ablation"],
+    "defibrillator": ["defibrillator"],
+    "need a defibrillator": ["defibrillator"],
+
+    # pulmonology
+    "copd": ["breathing test", "pulmonary"],
+    "asthma test": ["spirometry", "bronchial challenge"],
+    "lung function test": ["breathing test", "spirometry"],
+    "need oxygen": ["oxygen concentrator"],
+    "low oxygen": ["pulse oximetry", "oxygen"],
+    "chronic cough": ["chest", "pulmonology"],
+    "lung cancer screening": ["lung cancer screening"],
+    "collapsed lung": ["chest tube"],
+
+    # ENT
+    "deviated septum": ["septoplasty"],
+    "cant breathe through my nose": ["septoplasty", "turbinate"],
+    "chronic sinus infections": ["sinus surgery", "balloon sinuplasty"],
+    "voice is hoarse": ["voice evaluation", "laryngoscopy"],
+    "losing my voice": ["voice evaluation", "laryngoscopy"],
+    "vocal cord problems": ["laryngoscopy", "vocal cord"],
+    "swimmers ear": ["ear exam", "ear wax"],
+    "ear infection": ["ear exam", "ear tube"],
+    "ear wax buildup": ["ear wax"],
+    "tubes in ears": ["ear tube"],
+    "nosebleed": ["nosebleed"],
+    "nose bleeds a lot": ["nosebleed"],
+
+    # neurology
+    "nerve test": ["emg", "nerve"],
+    "nerve damage": ["emg", "nerve"],
+    "tremor": ["neuropsychological", "autonomic"],
+    "balance problems": ["vestibular", "balance"],
+    "fainting": ["autonomic", "eeg"],
+    "passed out": ["autonomic", "eeg"],
+    "parkinsons": ["deep brain stimulation"],
+    "herniated disc": ["laminectomy", "disc replacement", "spinal fusion"],
+    "pinched nerve": ["nerve root block", "laminectomy"],
+    "sciatica": ["epidural steroid", "laminectomy"],
+    "back injection": ["epidural steroid", "facet joint"],
+    "spinal stenosis": ["laminectomy", "spinal fusion"],
+    "compression fracture": ["compression fracture"],
+    "brain tumor": ["craniotomy", "brain tumor"],
+    "brain surgery": ["craniotomy"],
+    "epilepsy": ["vagus nerve stimulator", "eeg"],
+
+    # audiology
+    "hearing aid": ["hearing test"],
+    "cant hear out of one ear": ["hearing test"],
+    "vertigo": ["vestibular", "bppv"],
+    "spinning sensation": ["vestibular", "bppv"],
+
+    # mental health / substance use -- more
+    "couples counseling": ["couples therapy"],
+    "marriage counseling": ["couples therapy"],
+    "family therapy": ["family", "therapy"],
+    "psychiatric evaluation": ["psychiatric evaluation"],
+    "need my meds adjusted": ["medication management"],
+    "bipolar": ["medication management", "psychiatric"],
+
+    # maternity
+    "in labor": ["delivery"],
+    "having contractions": ["delivery", "nonstress"],
+    "breech baby": ["cephalic version"],
+    "c-section": ["c-section"],
+    "vbac": ["vbac"],
+    "prenatal care": ["prenatal"],
+    "lactation help": ["lactation"],
+    "breastfeeding help": ["lactation"],
+    "gestational diabetes": ["gestational diabetes"],
+    "rh negative": ["rhogam"],
+
+    # pediatrics
+    "newborn screening": ["newborn metabolic"],
+    "circumcision for my son": ["circumcision"],
+    "child development delay": ["developmental screening", "autism"],
+    "speech delay": ["speech-language", "developmental screening"],
+
+    # preventive
+    "travel vaccines": ["yellow fever", "typhoid", "japanese encephalitis"],
+    "going abroad": ["yellow fever", "typhoid"],
+    "weight loss program": ["weight management", "obesity"],
+
+    # equipment
+    "need a wheelchair": ["wheelchair"],
+    "need a walker": ["walker"],
+    "need a cane": ["cane"],
+    "need crutches": ["crutches"],
+    "need a knee brace": ["knee brace"],
+    "need a back brace": ["back brace"],
+    "need a hospital bed": ["hospital bed"],
+    "bedsores": ["pressure pad", "bedsore"],
+    "need a nebulizer": ["nebulizer"],
+    "need a glucose monitor": ["glucose monitor"],
+    "need a commode": ["commode"],
+
+    # procedures -- cardiac / vascular
+    "pacemaker surgery": ["pacemaker insertion"],
+    "afib treatment": ["cardiac ablation"],
+    "chemo port": ["chemo port"],
+
+    # procedures -- GI
+    "colon removal": ["colectomy"],
+    "appendix removal": ["appendectomy"],
+    "appendicitis": ["appendectomy"],
+    "hemorrhoids": ["hemorrhoid"],
+    "hemorrhoid removal": ["hemorrhoidectomy", "hemorrhoid banding"],
+    "feeding tube": ["feeding tube"],
+    "dialysis": ["dialysis", "hemodialysis"],
+    "need dialysis": ["dialysis"],
+    "kidney failure": ["dialysis"],
+
+    # procedures -- eye
+    "cataract removal": ["cataract surgery"],
+    "glaucoma surgery": ["trabeculectomy", "glaucoma laser"],
+    "retina surgery": ["vitrectomy", "retinal detachment"],
+    "macular degeneration": ["macular degeneration"],
+    "droopy eyelid": ["ptosis"],
+    "eyelid surgery": ["blepharoplasty"],
+
+    # procedures -- orthopedic / spine
+    "rotator cuff": ["rotator cuff"],
+    "torn rotator cuff": ["rotator cuff"],
+    "torn meniscus": ["meniscus"],
+    "torn acl": ["acl"],
+    "acl surgery": ["acl reconstruction"],
+    "knee scope": ["knee arthroscopy"],
+    "shoulder scope": ["shoulder arthroscopy"],
+
+    # procedures -- urology / gyn
+    "iui": ["intrauterine insemination"],
+    "ivf": ["embryo transfer", "egg freezing"],
+    "fibroids": ["fibroid"],
+    "uterine fibroids": ["fibroid"],
+    "prolapse": ["prolapse repair"],
+    "bladder leakage": ["bladder sling", "urodynamic"],
+    "incontinence": ["bladder sling", "urodynamic"],
+    "overactive bladder": ["bladder botox", "urodynamic"],
+    "abnormal pap smear": ["colposcopy"],
+    "endometriosis": ["endometrial biopsy"],
+
+    # procedures -- skin / wound
+    "diabetic foot care": ["nail trimming", "foot care"],
+    "toenail fungus": ["nail removal"],
+    "ingrown fingernail": ["nail removal"],
+    "amputation": ["amputation"],
+    "wound wont heal": ["wound care", "negative pressure"],
+    "stitches": ["laceration repair"],
+    "cut needs stitches": ["laceration repair"],
+    "deep cut": ["laceration repair"],
+    "bone marrow test": ["bone marrow"],
+
+    # procedures -- misc pain / spasm treatment
+    "botox": ["botox"],
+    "facial spasm": ["facial spasm"],
+    "muscle spasticity": ["limb spasticity"],
+    "cerebral palsy": ["cerebral palsy"],
+    "peyronies disease": ["peyronie's"],
+    "hormone pellets": ["hormone pellet"],
+
+    # emergency / urgent care
+    "er visit": ["emergency room"],
+    "went to the er": ["emergency room"],
+    "ambulance ride": ["ambulance"],
+    "need to see someone today": ["urgent care"],
+
+    # specialty
+    "second opinion": ["consultation", "second opinion"],
+    "specialist referral": ["specialist"],
+    "genetic counselor": ["genetic counseling"],
+
+    # endocrinology / diabetes
+    "cgm": ["continuous glucose monitoring"],
+    "continuous glucose monitor": ["continuous glucose monitoring"],
+    "diabetes management classes": ["diabetes self-management"],
+    "diabetes education": ["diabetes self-management"],
+
+    # gastrointestinal -- more
+    "ibs": ["breath hydrogen", "anorectal manometry"],
+    "bloating": ["breath hydrogen"],
+    "constipation": ["anorectal manometry"],
+    "lactose intolerance": ["lactose intolerance"],
+    "diarrhea": ["fecal"],
+    "chronic diarrhea": ["fecal", "colonoscopy"],
+    "stomach bug": ["abdominal"],
+    "food poisoning": ["abdominal"],
+    "ulcer": ["endoscopy", "h. pylori"],
+    "gerd": ["reflux", "endoscopy"],
+
+    # skin -- more
+    "skin problem": ["skin"],
+    "skin infection": ["skin abscess"],
+    "boil": ["skin abscess"],
+    "abscess": ["skin abscess"],
+
+    # pediatric / caregiver phrasing
+    "my child has a fever": ["urgent care", "well-child"],
+    "my kid has a fever": ["urgent care", "well-child"],
+    "my baby has a fever": ["urgent care"],
+    "my baby has a rash": ["well-child"],
+    "my kid needs a checkup": ["well-child"],
+    "my son needs a physical": ["physical"],
+    "my daughter needs a physical": ["physical"],
+    "child immunizations": ["childhood immunization"],
+    "kids shots": ["childhood immunization"],
+
+    # therapy -- more
+    "autism therapy": ["aba therapy"],
+    "behavioral therapy for autism": ["aba therapy"],
+
+    # equipment -- more
+    "need a foot brace": ["ankle/foot brace", "foot orthotic"],
+    "need orthotics": ["foot orthotic"],
+
+    # injury / accident phrasing
+    "car accident": ["xray", "ct scan"],
+    "sports injury": ["xray", "mri"],
+    "fell down the stairs": ["xray", "ct scan - head"],
+    "twisted my knee": ["knee"],
+    "rolled my ankle": ["ankle"],
+    "hit my knee": ["knee"],
+    "hurt my back at work": ["back", "lumbar"],
+    "workplace injury": ["xray"],
+
+    # more joint/back phrasing variants (highest-traffic body parts)
+    "knee is swollen": ["knee"],
+    "knee gives out": ["knee"],
+    "stiff knee": ["knee"],
+    "shoulder is stiff": ["shoulder"],
+    "frozen shoulder": ["shoulder"],
+    "cant raise my arm": ["shoulder", "rotator cuff"],
+    "back is stiff": ["back", "lumbar"],
+    "back spasm": ["back", "lumbar"],
+
+    # cardiology -- more
+    "family history of heart disease": ["cardiac stress test", "cholesterol"],
+    "arm circulation problems": ["arm circulation"],
+    "device check": ["pacemaker", "defibrillator"],
+
+    # dental -- more
+    "dental emergency": ["emergency dental"],
+    "tooth abscess": ["emergency dental", "tooth"],
+    "pediatric dentist": ["dental cleaning (child)", "behavior management"],
+
+    # ENT -- more
+    "hearing loss": ["hearing test"],
+    "sinusitis": ["sinus surgery", "balloon sinuplasty"],
+    "post nasal drip": ["sinus"],
+    "chronic ear infections": ["ear tube"],
+
+    # imaging -- more
+    "hip dysplasia": ["hip dysplasia"],
+    "first trimester screening": ["nuchal translucency"],
+
+    # lab -- a very common gap: urinary tract infection
+    "uti": ["urinalysis", "urine culture"],
+    "bladder infection": ["urinalysis", "urine culture"],
+    "yeast infection": ["yeast"],
+
+    # mental health -- naming the condition directly, not just how it feels
+    "anxiety": ["therapy"],
+    "depression": ["therapy"],
+    "ptsd": ["therapy"],
+    "ocd": ["therapy"],
+    "grief counseling": ["therapy"],
+
+    # sleep -- more
+    "narcolepsy": ["multiple sleep latency"],
+    "falling asleep during the day": ["multiple sleep latency"],
+
+    # vision -- more
+    "color blind": ["color vision"],
+    "night blindness": ["dark adaptation"],
+    "peripheral vision test": ["visual field"],
+
+    # chronic pain
+    "nerve pain": ["nerve block", "epidural steroid"],
+    "chronic pain management": ["pain pump", "nerve block"],
+
+    # maternity -- more
+    "morning sickness": ["prenatal"],
+    "high risk pregnancy": ["prenatal"],
+
+    # body-part hurts/pain symmetry -- a second-pass audit found several
+    # body parts with only one of the two phrasings mapped (e.g. "rib
+    # hurts" existed but not "rib pain"), which for a short word like "rib"
+    # matters: it's too short to survive the raw-word fallback on its own
+    # (see _loose_match_tokens), so without an explicit entry the query
+    # just... doesn't find it.
+    "rib pain": ["rib"],
+    "ribs hurt": ["rib"],
+    "ear pain": ["ear exam", "ear wax", "ear tube"],
+    "arm hurts": ["arm"],
+    "arm pain": ["arm"],
+    "wrist pain": ["wrist"],
+    "finger pain": ["finger"],
+    "toe pain": ["toe"],
+    "collarbone pain": ["collarbone"],
+    "tailbone pain": ["tailbone"],
+
+    # third-pass gap analysis: cross-referenced every one of the 705 real
+    # catalog services against this whole table and found 75 with zero
+    # plain-language route in at all. Most of those are fine as-is (things
+    # like "Root canal" or "Acupuncture" are already exactly what a
+    # layperson would type) or genuinely niche enough that nobody
+    # symptom-searches for them (NICU-only procedures, single-purpose
+    # imaging tests a doctor orders directly). These are the ones that
+    # were real, patient-plausible gaps.
+    "osteoporosis test": ["bone density scan"],
+    "osteoporosis screening": ["bone density scan"],
+    "gastroparesis": ["gastric emptying"],
+    "food doesnt digest": ["gastric emptying"],
+    "gout": ["uric acid"],
+    "gout test": ["uric acid"],
+    "house call": ["doctor home visit"],
+    "video appointment": ["telehealth"],
+    "video doctor visit": ["telehealth"],
+    "see a doctor online": ["telehealth"],
+    "torn bicep": ["biceps tendon"],
+    "scratched cornea": ["corneal debridement"],
+    "corneal abrasion": ["corneal debridement"],
+    "something stuck in my ear": ["ear foreign body"],
+    "bug in my ear": ["ear foreign body"],
+    "hidradenitis suppurativa": ["hidradenitis"],
+    "boils in armpit": ["hidradenitis"],
+    "recurring boils": ["hidradenitis"],
+    "lung cancer surgery": ["lobectomy"],
+    "partial lung removal": ["lobectomy"],
+    "remove hardware from surgery": ["orthopedic hardware"],
+    "plate and screws removal": ["orthopedic hardware"],
+    "rectal bulge": ["rectocele repair", "prolapse repair"],
+    "vaginal bulge": ["rectocele repair", "prolapse repair"],
+    "ruptured spleen": ["splenectomy"],
+    "enlarged spleen": ["splenectomy"],
+    "gamma knife": ["stereotactic radiosurgery"],
+    "blocked tear duct": ["tear duct"],
+    "watery eye": ["tear duct"],
+    "hemochromatosis": ["therapeutic phlebotomy"],
+    "too much iron in my blood": ["therapeutic phlebotomy"],
+    "muscle knot": ["trigger point"],
+    "knot in my back": ["trigger point"],
+    "knot in my shoulder": ["trigger point"],
+    "swollen veins in scrotum": ["varicocele"],
+    "lung capacity test": ["lung volume"],
+    "osteopath": ["osteopathic manipulative"],
+    "hoyer lift": ["patient lift"],
+    "need a lift for my parent": ["patient lift"],
+    "uterine prolapse": ["pessary", "prolapse repair"],
+    "failed root canal": ["apicoectomy"],
+    "root canal infection": ["apicoectomy"],
+    "exposed tooth nerve": ["pulp cap"],
+    "nerve showing in tooth": ["pulp cap"],
+    "havent been to the dentist in years": ["full mouth debridement"],
+    "really dirty teeth": ["full mouth debridement"],
+    "bridge came loose": ["recement", "reseat a bridge"],
+    "bridge fell out": ["recement", "reseat a bridge"],
+    "flu like symptoms": ["covid/flu/rsv"],
+    "cold or flu test": ["covid/flu/rsv combo"],
+    "pancreatitis": ["amylase", "lipase"],
+    "pancreas problems": ["amylase/lipase"],
+    "medicare checkup": ["medicare annual wellness"],
+    "annual medicare visit": ["medicare annual wellness"],
 }
+
+
+
+# Precompiled once at import time, not per-request: at 500+ curated phrases,
+# a plain `phrase in q_lower` substring check is a real correctness bug, not
+# just a theoretical one -- "uti" (for urinary tract infection) is a literal
+# substring of "aUTIsm", so searching "autism therapy" was quietly also
+# triggering the UTI expansion, and "ibs" (irritable bowel) is a literal
+# substring of "ribs", so "broken ribs" was triggering the IBS one. Matching
+# on a \b-bounded regex instead of str.__contains__ fixes every case like
+# this at once, present or future, and is cheap here specifically because
+# it runs once against one short query string -- nothing like the per-row
+# regexp_matches cost across 21M price rows that was reverted elsewhere.
+#
+# The trailing boundary is deliberately loosened with an optional "s?" —
+# a plain \b after "broken rib" no longer matches inside "broken ribs" the
+# way the old substring check accidentally did (ribs are almost always
+# described in the plural), and the same gap would hit "twisted my ankle"
+# vs "twisted my ankles", etc. The leading \b is what actually blocks the
+# uti/autism and ibs/ribs false positives (there's no boundary between the
+# 'a' and 'u' in "autism", or the 'r' and 'i' in "ribs"), so relaxing only
+# the trailing side keeps that protection while tolerating simple plurals.
+_SYMPTOM_EXPANSION_PATTERNS = [
+    (re.compile(r"\b" + re.escape(phrase) + r"s?\b"), mapped)
+    for phrase, mapped in _SYMPTOM_EXPANSIONS.items()
+]
+
+
+_WORD_RE = re.compile(r"[a-z]{4,}")
+_vocabulary: set[str] | None = None
+
+
+def _get_vocabulary() -> set[str]:
+    """Every real word (4+ letters) that actually appears somewhere in the
+    catalog's own display_name/search_terms text, built once from the DB
+    and cached for the life of the process. This is the correction target
+    for _typo_correct() below -- deliberately the catalog's own vocabulary,
+    not a general English dictionary, so a typo gets corrected toward a
+    word that could plausibly appear in a service name, not toward some
+    unrelated but more common English word."""
+    global _vocabulary
+    if _vocabulary is None:
+        rows = q("SELECT DISTINCT display_name, search_terms FROM prices", [])
+        words: set[str] = set()
+        for row in rows:
+            for field in (row.get("display_name"), row.get("search_terms")):
+                if field:
+                    words.update(_WORD_RE.findall(field.lower()))
+        for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
+            words.update(_WORD_RE.findall(phrase))
+            for m in mapped:
+                words.update(_WORD_RE.findall(m))
+        _vocabulary = words
+    return _vocabulary
+
+
+def _typo_correct(word: str) -> Optional[str]:
+    """If `word` isn't itself a real word in the catalog's vocabulary, find
+    the closest one that is -- catches ordinary typos ("colesterol",
+    "diarrhia") without ever touching a word that's already spelled
+    correctly (those pass straight through, matched or not, exactly as
+    before). cutoff=0.8 is deliberately strict: this only ever ADDS a token
+    alongside the original (see _search_tokens), so a wrong guess is
+    low-cost, but a cutoff any looser started correcting genuinely
+    different short words into each other."""
+    if len(word) < 5 or word in _get_vocabulary():
+        return None
+    matches = difflib.get_close_matches(word, _get_vocabulary(), n=1, cutoff=0.8)
+    return matches[0] if matches else None
+
+
+def _corrected_query_text(q_lower: str) -> str:
+    """`q_lower` with each individual word typo-corrected in place (already-
+    correct words and stopwords pass through _typo_correct's own checks
+    untouched), word order and spacing otherwise preserved. This exists so a
+    _SYMPTOM_EXPANSIONS phrase can still fire off a misspelling: correcting
+    "diarrhia" to "diarrhea" as a bare search token doesn't help if the word
+    "diarrhea" itself never appears in any display_name (its whole purpose
+    as a phrase key is to trigger the mapped ["fecal"] tokens that DO) --
+    checking phrase patterns against this corrected text too, alongside the
+    original, is what lets that still happen."""
+    return " ".join(_typo_correct(w) or w for w in q_lower.split())
 
 
 def _search_tokens(q_: str) -> list[str]:
@@ -703,11 +1452,14 @@ def _search_tokens(q_: str) -> list[str]:
     ALL of them to match already makes a short word like "ct" or "mri" safe.
     See _loose_match_tokens() for the narrower list pass 2 uses."""
     q_lower = q_.lower()
+    corrected_q = _corrected_query_text(q_lower)
     extra: list[str] = []
-    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
-        if phrase in q_lower:
+    for pattern, mapped in _SYMPTOM_EXPANSION_PATTERNS:
+        if pattern.search(q_lower) or pattern.search(corrected_q):
             extra += mapped
-    tokens = [t for t in q_lower.split() if t not in _SEARCH_STOPWORDS] + extra
+    raw = [t for t in q_lower.split() if t not in _SEARCH_STOPWORDS]
+    corrected_words = [t for t in corrected_q.split() if t not in _SEARCH_STOPWORDS]
+    tokens = raw + corrected_words + extra
     seen: set[str] = set()
     return [t for t in tokens if not (t in seen or seen.add(t))]
 
@@ -725,16 +1477,99 @@ def _loose_match_tokens(q_: str, tokens: list[str]) -> list[str]:
     tried and reverted. So: drop raw query words under 4 characters here
     (only here, not from pass 1) and keep the cheap LIKE plan. Curated
     _SYMPTOM_EXPANSIONS words are kept regardless of length — they're
-    deliberate additions, not noise, so "eye"/"ear" still work."""
+    deliberate additions, not noise, so "eye"/"ear" still work.
+
+    When a curated phrase actually fired, its words are used EXCLUSIVELY —
+    raw query words are dropped even if they're 4+ characters. Reasoning:
+    a phrase like "high risk pregnancy" got curated specifically because its
+    own words ("high", "risk") are unreliable search terms that happen to
+    hit unrelated services ("HPV high-risk test", "High-altitude simulation
+    test") in this OR-across-tokens pass — mixing them back in let two
+    generic-word matches outrank the one specific, actually-relevant
+    "prenatal" match. If nothing in the curated table matched this query,
+    there's no better signal than the raw words, so they're kept as before."""
     q_lower = q_.lower()
+    corrected_q = _corrected_query_text(q_lower)
     expansion_words: set[str] = set()
-    for phrase, mapped in _SYMPTOM_EXPANSIONS.items():
-        if phrase in q_lower:
+    for pattern, mapped in _SYMPTOM_EXPANSION_PATTERNS:
+        if pattern.search(q_lower) or pattern.search(corrected_q):
             expansion_words.update(mapped)
-    return [t for t in tokens if t in expansion_words or len(t) >= 4]
+    if expansion_words:
+        return [t for t in tokens if t in expansion_words]
+    return [t for t in tokens if len(t) >= 4]
 
 
-def _services_rows(where: list[str], params: list[Any], limit: int) -> list[dict]:
+# Bare-minimum, privacy-conscious usage logging -- two JSONL files, no
+# analytics vendor, no cookies, no IP address stored anywhere. Answers three
+# questions: how many times has the site actually been opened
+# (page_views.jsonl), what did people search for, and how many results did
+# each one get (search_activity.jsonl, one line per search, hits and misses
+# both -- a 0 is a search that didn't work, same info the earlier
+# misses-only version of this log had, just alongside every search that DID
+# work instead of a separate file). /app/data-writable is a host bind mount
+# on the droplet (see DEPLOY.md's "persistent data directory") that survives
+# container restarts and redeploys, unlike everything else the container
+# writes; it doesn't exist on a local dev machine, which _append_jsonl below
+# treats as "logging is off here", not an error.
+SEARCH_LOG_DIR = Path(os.environ.get("STARKWELL_SEARCH_LOG_DIR", "/app/data-writable"))
+SEARCH_ACTIVITY_LOG = SEARCH_LOG_DIR / "search_activity.jsonl"
+PAGE_VIEW_LOG = SEARCH_LOG_DIR / "page_views.jsonl"
+
+# Deliberately no analytics vendor, no cookies, no IP address stored -- this
+# is a from-scratch, private page-view count answering one question ("how
+# many times has the site actually been opened"), nothing more. A hit here
+# fires once per real page load (the SPA catch-all below, not on every
+# in-app navigation -- React Router handles those client-side with no
+# server request at all, so this can't double-count someone browsing
+# around once they've landed). Automated traffic is the main way a raw
+# count like this lies, so anything with a recognizably non-human
+# User-Agent is skipped rather than logged and quietly overstating real
+# visits.
+_BOT_UA_RE = re.compile(
+    r"bot|crawl|spider|slurp|monitor|uptime|pingdom|bingpreview|"
+    r"facebookexternalhit|headlesschrome|curl|wget|python-requests|go-http-client",
+    re.IGNORECASE,
+)
+
+
+def _append_jsonl(path: Path, data: dict) -> None:
+    """Best-effort append-only JSONL write. Never raises — a full disk or a
+    missing mount must not turn an unrelated request into a 500, it should
+    just mean this one entry goes unrecorded."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(data) + "\n")
+    except OSError:
+        pass
+
+
+def _log_search_activity(query: str, result_count: int) -> None:
+    """Append one search — what was typed and how many results it found.
+    result_count == 0 is exactly what the old miss-only log captured;
+    logging every search instead of just the failures is what lets "what
+    are people actually looking for" and "how often does search fail them"
+    both be answered from one file."""
+    _append_jsonl(SEARCH_ACTIVITY_LOG, {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "query": query[:300],
+        "results": result_count,
+    })
+
+
+def _log_page_view(path: str, user_agent: str) -> None:
+    """Append one real page load, unless it looks automated."""
+    if _BOT_UA_RE.search(user_agent or ""):
+        return
+    _append_jsonl(PAGE_VIEW_LOG, {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "path": "/" + path,
+    })
+
+
+def _services_rows(
+    where: list[str], params: list[Any], limit: int, order_by: str = "providers DESC"
+) -> list[dict]:
     """Shared aggregation behind /api/services' two search passes below."""
     # low_price/high_price use the 5th/95th percentile, not true min/max. A
     # blanket network contract can leave a grocery-store pharmacy with a
@@ -762,7 +1597,7 @@ def _services_rows(where: list[str], params: list[Any], limit: int) -> list[dict
         FROM prices
         WHERE {' AND '.join(where)}
         GROUP BY service_key
-        ORDER BY providers DESC
+        ORDER BY {order_by}
         LIMIT {int(limit)}
     """, params)
 
@@ -818,6 +1653,7 @@ def services(
         and_params += [f"%{tok}%", f"%{tok}%"]
     rows = _services_rows(and_where, and_params, limit)
     if rows:
+        _log_search_activity(q_, len(rows))
         return {"query": q_, "results": rows}
 
     # Pass 2: only on a genuine zero-result miss, loosen to ANY token
@@ -829,6 +1665,7 @@ def services(
     # rather than a word-boundary regex.
     loose_tokens = _loose_match_tokens(q_, tokens)
     if not loose_tokens:
+        _log_search_activity(q_, 0)
         return {"query": q_, "results": []}
     or_where = list(base_where)
     or_params = list(base_params)
@@ -839,7 +1676,25 @@ def services(
     or_where.append(f"({or_clause})")
     for tok in loose_tokens:
         or_params += [f"%{tok}%", f"%{tok}%"]
-    return {"query": q_, "results": _services_rows(or_where, or_params, limit)}
+
+    # Pass 2 is an OR, so a service matching every loose token is exactly as
+    # eligible as one matching only the single most generic word in the
+    # query (e.g. "removal" alone pulls in every "X removal" procedure in
+    # the catalog). Ranking those equally by raw popularity let something
+    # like "cataract removal" bury the actual Cataract surgery service
+    # under Ear wax removal/Pacemaker removal/etc, which happen to have far
+    # more billing volume. Counting how many of the loose tokens each row's
+    # display_name alias actually matches, and ranking that first, fixes
+    # exactly this case without changing pass 1 (an exact AND match) at all.
+    relevance_expr = " + ".join(
+        "CASE WHEN lower(any_value(display_name)) LIKE ? THEN 1 ELSE 0 END"
+        for _ in loose_tokens
+    )
+    relevance_params = [f"%{tok}%" for tok in loose_tokens]
+    order_by = f"({relevance_expr}) DESC, providers DESC"
+    final_rows = _services_rows(or_where, or_params + relevance_params, limit, order_by=order_by)
+    _log_search_activity(q_, len(final_rows))
+    return {"query": q_, "results": final_rows}
 
 
 def _services_by_keys(keys: list[str]) -> dict[str, dict]:
@@ -1230,6 +2085,8 @@ def facility_rows(
     """, params)
     if not rows:
         raise HTTPException(404, f"no locations for {service_key}")
+    for r in rows:
+        r["facility_key"] = _facility_key(r["address"], r["city"])
 
     # ---- optional: price every location for one plan -----------------------
     # Done here rather than by calling /estimate 25 times: one query for the
@@ -1301,6 +2158,108 @@ def facility_rows(
                                      r.get("your_cost") or 0))
 
     return {"service_key": service_key, "count": len(rows), "results": rows}
+
+
+# ---- facility reviews ------------------------------------------------------
+# The first genuinely writable, persistent data this app has ever had (search
+# logging is append-only and read by SSH, not by the app itself). SQLite,
+# not another DuckDB table: reviews need real single-row inserts and updates
+# from concurrent requests, which is exactly what SQLite's own file locking
+# is for, whereas `prices` is a bulk-loaded, read-only table rebuilt fresh on
+# every process start. Lives on the same /app/data-writable persistent mount
+# as the search logs (see DEPLOY.md) so it survives every redeploy.
+#
+# "source" distinguishes a review written by a Starkwell visitor from one
+# pulled in from somewhere else (Google, eventually) sharing the same
+# facility_key — never blended into one number, always shown and averaged
+# separately, both because conflating them would be misleading and because
+# reproducing another platform's review content carries its own attribution
+# requirements that a Starkwell-authored review simply doesn't have.
+REVIEWS_DB_PATH = SEARCH_LOG_DIR / "reviews.db"
+
+
+def _reviews_db() -> sqlite3.Connection:
+    REVIEWS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(REVIEWS_DB_PATH, timeout=10)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            facility_key TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'starkwell',
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            author_name TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_reviews_facility ON reviews(facility_key)")
+    con.row_factory = sqlite3.Row
+    return con
+
+
+class ReviewBody(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=1000)
+    author_name: Optional[str] = Field(None, max_length=80)
+
+
+# In-process, not persisted — same reasoning as the AI-search rate limiter
+# elsewhere in this file: a single uvicorn worker, so in-memory state is
+# safe, and resetting on every redeploy just means the worst case after a
+# deploy is one extra review from the same visitor, not a real abuse vector
+# at this site's scale.
+_review_rate_state: dict[str, list[float]] = {}
+
+
+def _check_review_rate_limit(ip: str) -> None:
+    now = time.time()
+    hits = [t for t in _review_rate_state.get(ip, []) if now - t < 3600.0]
+    if len(hits) >= 5:
+        raise HTTPException(429, "Too many reviews submitted recently — try again in a bit.")
+    hits.append(now)
+    _review_rate_state[ip] = hits
+
+
+@app.post("/api/facilities/{facility_key}/reviews")
+def submit_review(facility_key: str, body: ReviewBody, request: Request):
+    """Anyone can post — there's no account system anywhere on this site
+    (see UserContext.tsx) — so this is deliberately open, with a rate limit
+    as the only real defense against spam at this site's current scale."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_review_rate_limit(client_ip)
+    con = _reviews_db()
+    try:
+        con.execute(
+            "INSERT INTO reviews (facility_key, source, rating, comment, author_name, created_at) "
+            "VALUES (?, 'starkwell', ?, ?, ?, ?)",
+            (facility_key, body.rating, body.comment, body.author_name,
+             datetime.now(timezone.utc).isoformat()),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.get("/api/facilities/{facility_key}/reviews")
+def get_reviews(facility_key: str):
+    con = _reviews_db()
+    try:
+        rows = con.execute(
+            "SELECT source, rating, comment, author_name, created_at FROM reviews "
+            "WHERE facility_key = ? ORDER BY created_at DESC", (facility_key,)
+        ).fetchall()
+    finally:
+        con.close()
+    reviews = [dict(r) for r in rows]
+    by_source: dict[str, list[int]] = {}
+    for r in reviews:
+        by_source.setdefault(r["source"], []).append(r["rating"])
+    sources = {
+        src: {"average": round(sum(ratings) / len(ratings), 1), "count": len(ratings)}
+        for src, ratings in by_source.items()
+    }
+    return {"facility_key": facility_key, "sources": sources, "reviews": reviews}
 
 
 @app.get("/api/services/{service_key}/cash")
@@ -1725,10 +2684,14 @@ if DIST.exists():
     # /prices or /about — reloading on one of them must still return
     # index.html rather than a 404, and this is what does that.
     @app.get("/{full_path:path}")
-    async def spa(full_path: str):
+    async def spa(full_path: str, request: Request):
         candidate = DIST / full_path
         if candidate.is_file():
             return FileResponse(candidate)
+        # A real page load (not a JS/CSS/image asset request above) — see
+        # _log_page_view for why this is the one place that fires once per
+        # visit rather than once per in-app navigation.
+        _log_page_view(full_path, request.headers.get("user-agent", ""))
         # index.html: always revalidate. Its URL never changes between
         # deploys but its content (which JS/CSS bundle it points to) does,
         # so caching it is what let a stale build linger after a deploy

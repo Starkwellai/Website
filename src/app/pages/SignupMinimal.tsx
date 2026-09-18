@@ -1,3 +1,8 @@
+import { useNavigate } from "react-router";
+import { useState } from "react";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { ArrowRight } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
@@ -41,7 +46,7 @@ export function SignupMinimal() {
           <img 
             src={logo} 
             alt="Starkwell" 
-            className="h-20 cursor-pointer rounded-[5px]"
+            className="h-12 cursor-pointer rounded-[5px]"
             onClick={() => navigate("/")}
           />
         </div>

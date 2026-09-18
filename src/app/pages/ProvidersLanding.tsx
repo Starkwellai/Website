@@ -133,7 +133,7 @@ export function ProvidersLanding() {
             <img
               src={logo}
               alt="Starkwell"
-              className="h-6 md:h-6 lg:h-16 cursor-pointer rounded-[5px]"
+              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
               onClick={() => navigate("/")}
             />
             <div className="flex items-center gap-4">
@@ -374,7 +374,7 @@ export function ProvidersLanding() {
         <div className="container mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <img src={logo} alt="Starkwell" className="h-6 md:h-6 lg:h-16 mb-4 rounded-[5px]" />
+              <img src={logo} alt="Starkwell" className="h-8 mb-4 rounded-[5px]" />
               <p className="text-sm text-gray-400">
                 Connecting patients with quality healthcare providers through transparency and technology.
               </p>

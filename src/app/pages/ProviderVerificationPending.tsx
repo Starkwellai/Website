@@ -22,7 +22,7 @@ export function ProviderVerificationPending() {
           <img
             src={logo}
             alt="Starkwell"
-            className="h-6 md:h-6 lg:h-16 cursor-pointer rounded-[5px]"
+            className="h-9 md:h-12 cursor-pointer rounded-[5px]"
             onClick={() => navigate("/")}
           />
         </div>

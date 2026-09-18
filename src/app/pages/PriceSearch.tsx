@@ -15,17 +15,22 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldCheck, ClipboardList } from "lucide-react";
+import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldCheck, ClipboardList, ExternalLink, Bookmark } from "lucide-react";
 import { ProviderMap, type MapPoint } from "../components/ProviderMap";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   searchServices, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
-  getCashPrices, getFacilityQuality, formatPrice, isPreciseLocation, facilityLabel, isHSA,
+  getCashPrices, getFacilityQuality, getFacilityReviews, submitFacilityReview,
+  formatPrice, isPreciseLocation, facilityLabel, googleMapsSearchUrl, isHSA,
   EVIDENCE_LABEL, SORT_LABEL,
   type Service, type Facility, type ProviderPrice, type Evidence,
   type Category, type ProviderSort, type Plan, type CashPrice, type QualityMeasure,
+  type FacilityReviews,
 } from "../../lib/starkwell";
+import {
+  getSavedServices, getSavedFacilities, toggleSavedService, toggleSavedFacility,
+} from "../../lib/savedItems";
 
 /** HCAHPS publishes a derived "_STAR_RATING" for these same questions, but
  *  in this dataset every one of them is null for all 48 facilities that
@@ -243,6 +248,39 @@ export function PriceSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Saved procedures/locations — localStorage-only, no account needed. See
+  // src/lib/savedItems.ts for why this stays client-side. Sets, not the raw
+  // records, since these views only need fast "is this one saved?" lookups;
+  // savedItems.ts is the source of truth for the actual saved records.
+  const [savedServiceKeys, setSavedServiceKeys] = useState<Set<string>>(new Set());
+  const [savedFacilityKeys, setSavedFacilityKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSavedServiceKeys(new Set(getSavedServices().map(s => s.service_key)));
+    setSavedFacilityKeys(new Set(getSavedFacilities().map(f => f.facility_key)));
+  }, []);
+
+  function handleToggleSavedService(s: Service) {
+    const nowSaved = toggleSavedService(
+      { service_key: s.service_key, display_name: s.display_name, category: s.category },
+    );
+    setSavedServiceKeys(prev => {
+      const next = new Set(prev);
+      if (nowSaved) next.add(s.service_key); else next.delete(s.service_key);
+      return next;
+    });
+  }
+
+  function handleToggleSavedFacility(f: Facility) {
+    const nowSaved = toggleSavedFacility(
+      { facility_key: f.facility_key, label: facilityLabel(f), address: f.address, city: f.city },
+    );
+    setSavedFacilityKeys(prev => {
+      const next = new Set(prev);
+      if (nowSaved) next.add(f.facility_key); else next.delete(f.facility_key);
+      return next;
+    });
+  }
+
   // Fallback for when a normal keyword search (above) comes back with zero
   // matches — lets the user describe their situation in plain language
   // instead of the procedure's medical name. Reset whenever a fresh keyword
@@ -302,6 +340,58 @@ export function PriceSearch() {
       .finally(() => { if (!cancelled) setQualityLoading(false); });
     return () => { cancelled = true; };
   }, [qualityFacility]);
+
+  // Reviews for the single selected facility (Layer 3 — see `facility`
+  // above). Refetched after a successful submit so the visitor sees their
+  // own review appear immediately, not just on next page load.
+  const [reviews, setReviews] = useState<FacilityReviews | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewName, setReviewName] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
+  function loadReviews(facilityKey: string) {
+    setReviewsLoading(true);
+    getFacilityReviews(facilityKey)
+      .then(setReviews)
+      .catch(() => setReviews(null))
+      .finally(() => setReviewsLoading(false));
+  }
+
+  useEffect(() => {
+    setShowReviewForm(false); setReviewSubmitted(false); setReviewError(null);
+    setReviewRating(0); setReviewComment(""); setReviewName("");
+    if (!facility?.facility_key) { setReviews(null); return; }
+    loadReviews(facility.facility_key);
+  }, [facility]);
+
+  async function handleSubmitReview() {
+    if (!facility?.facility_key || reviewRating < 1) return;
+    setReviewSubmitting(true);
+    setReviewError(null);
+    try {
+      await submitFacilityReview(facility.facility_key, {
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+        author_name: reviewName.trim() || undefined,
+      });
+      setReviewSubmitted(true);
+      setShowReviewForm(false);
+      loadReviews(facility.facility_key);
+    } catch (e) {
+      setReviewError(
+        e instanceof Error && e.message.startsWith("429")
+          ? "Too many reviews submitted recently — please try again later."
+          : "Couldn't submit that review — please try again."
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
 
   useEffect(() => { listCategories().then(setCategories).catch(() => {}); }, []);
   useEffect(() => { listPlans().then(setPlans).catch(() => {}); }, []);
@@ -459,12 +549,12 @@ export function PriceSearch() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="relative bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-6 py-2">
           <div className="flex items-center justify-between">
             <img
               src={logo}
               alt="Starkwell"
-              className="h-12 md:h-20 cursor-pointer rounded-[5px]"
+              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
               onClick={() => navigate("/")}
             />
             <SiteNav />
@@ -737,11 +827,15 @@ export function PriceSearch() {
             {!selected && (
               <div className="grid gap-3 sm:grid-cols-2">
                 {services.map(s => (
-                  <button
+                  <div
                     key={s.service_key}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelected(s)}
-                    className="text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(s); }
+                    }}
+                    className="text-left rounded-xl cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     <Card className="h-full bg-white transition hover:border-blue-400">
                       <CardContent className="p-4">
@@ -750,11 +844,24 @@ export function PriceSearch() {
                             <p className="font-medium text-gray-900">{s.display_name}</p>
                             <p className="text-sm text-gray-500">{s.category}</p>
                           </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-semibold text-gray-900">
-                              {formatPrice(s.typical_price)}
-                            </p>
-                            <p className="text-xs text-gray-500">typical</p>
+                          <div className="flex items-start gap-1.5 shrink-0">
+                            <div className="text-right">
+                              <p className="font-semibold text-gray-900">
+                                {formatPrice(s.typical_price)}
+                              </p>
+                              <p className="text-xs text-gray-500">typical</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); handleToggleSavedService(s); }}
+                              aria-label={savedServiceKeys.has(s.service_key) ? "Remove from saved procedures" : "Save this procedure"}
+                              aria-pressed={savedServiceKeys.has(s.service_key)}
+                              className="p-1 -m-1 -mt-1.5 text-gray-300 hover:text-blue-600"
+                            >
+                              <Bookmark
+                                className={`h-4 w-4 ${savedServiceKeys.has(s.service_key) ? "fill-blue-600 text-blue-600" : ""}`}
+                              />
+                            </button>
                           </div>
                         </div>
                         <p className="mt-2 text-xs text-gray-500">
@@ -764,7 +871,7 @@ export function PriceSearch() {
                         </p>
                       </CardContent>
                     </Card>
-                  </button>
+                  </div>
                 ))}
                 {loading && services.length === 0 && (
                   <>
@@ -829,6 +936,166 @@ export function PriceSearch() {
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+
+                {facility && (
+                  <Card className="mb-4">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-medium text-gray-900">Reviews</h3>
+                          {reviews?.sources.starkwell && (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                              <Star className="h-3 w-3 mr-1 fill-amber-500" />
+                              {reviews.sources.starkwell.average}/5 · {reviews.sources.starkwell.count}{" "}
+                              Starkwell {reviews.sources.starkwell.count === 1 ? "review" : "reviews"}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggleSavedFacility(facility)}
+                            className={savedFacilityKeys.has(facility.facility_key) ? "text-blue-600 border-blue-200" : ""}
+                          >
+                            <Bookmark
+                              className={`h-3.5 w-3.5 mr-1.5 ${savedFacilityKeys.has(facility.facility_key) ? "fill-blue-600 text-blue-600" : ""}`}
+                            />
+                            {savedFacilityKeys.has(facility.facility_key) ? "Saved" : "Save this location"}
+                          </Button>
+                          {!showReviewForm && (
+                            <Button size="sm" variant="outline" onClick={() => setShowReviewForm(true)}>
+                              Write a review
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                        <a
+                          href={googleMapsSearchUrl(facility)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                        >
+                          See reviews on Google
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/new-patient-guide")}
+                          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                        >
+                          New here? What to bring to your visit
+                        </button>
+                      </div>
+
+                      {reviewSubmitted && (
+                        <p className="text-sm text-emerald-700 mt-2">
+                          Thanks — your review has been posted.
+                        </p>
+                      )}
+
+                      {showReviewForm && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
+                          <div>
+                            <Label className="text-xs text-gray-600 mb-1 block">Your rating</Label>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map(n => (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() => setReviewRating(n)}
+                                  aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                                  className="p-0.5"
+                                >
+                                  <Star
+                                    className={`h-6 w-6 ${n <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="review-comment" className="text-xs text-gray-600 mb-1 block">
+                              Comment (optional)
+                            </Label>
+                            <Textarea
+                              id="review-comment"
+                              value={reviewComment}
+                              onChange={e => setReviewComment(e.target.value.slice(0, 1000))}
+                              placeholder="What was your experience like?"
+                              rows={3}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="review-name" className="text-xs text-gray-600 mb-1 block">
+                              Your name (optional)
+                            </Label>
+                            <Input
+                              id="review-name"
+                              value={reviewName}
+                              onChange={e => setReviewName(e.target.value.slice(0, 80))}
+                              placeholder="Anonymous"
+                            />
+                          </div>
+                          {reviewError && <p className="text-sm text-red-600">{reviewError}</p>}
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              disabled={reviewRating < 1 || reviewSubmitting}
+                              onClick={handleSubmitReview}
+                            >
+                              {reviewSubmitting ? "Posting…" : "Post review"}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setShowReviewForm(false)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {reviewsLoading && (
+                        <p className="text-sm text-gray-400 mt-3">Loading reviews…</p>
+                      )}
+
+                      {!reviewsLoading && reviews?.reviews.length === 0 && !showReviewForm && (
+                        <p className="text-sm text-gray-500 mt-3">
+                          No reviews yet — be the first to share your experience.
+                        </p>
+                      )}
+
+                      {!reviewsLoading && reviews && reviews.reviews.length > 0 && (
+                        <ul className="mt-3 space-y-3 divide-y divide-gray-100">
+                          {reviews.reviews.map((r, i) => (
+                            <li key={i} className={i === 0 ? "" : "pt-3"}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex">
+                                  {[1, 2, 3, 4, 5].map(n => (
+                                    <Star
+                                      key={n}
+                                      className={`h-3.5 w-3.5 ${n <= r.rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                                    />
+                                  ))}
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 bg-gray-50 text-gray-500 border-gray-200"
+                                >
+                                  {r.source === "starkwell" ? "Starkwell" : r.source}
+                                </Badge>
+                                <span className="text-xs text-gray-400">
+                                  {r.author_name || "Anonymous"} · {new Date(r.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              {r.comment && <p className="text-sm text-gray-700 mt-1">{r.comment}</p>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
                 )}
 
                 {/* Facilities arrived ordered by provider count. The price

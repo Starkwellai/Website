@@ -12,12 +12,12 @@ export function About() {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="relative bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-6 py-2">
           <div className="flex items-center justify-between">
             <img 
               src={logo} 
               alt="Starkwell" 
-              className="h-12 md:h-20 cursor-pointer rounded-[5px]"
+              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
               onClick={() => navigate("/")}
             />
             <SiteNav />
