@@ -1531,6 +1531,26 @@ _BOT_UA_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The bot-UA filter above catches crawlers that identify themselves — it
+# does nothing for the mass internet-wide scanners that hit every public IP
+# looking for exposed secrets (/.env, /admin/config.php, /truffle.js, ...)
+# using an ordinary browser User-Agent. Found live in production
+# (2026-09-23): those probes were passing the UA check and inflating the
+# view count. Blocklisting known scanner paths is a losing game -- there
+# are thousands of them -- so this allowlists the site's actual routes
+# instead, from src/app/routes.tsx. Anything not a real Starkwell page
+# (which, by construction, is every one of those scanner paths) is simply
+# not counted, no pattern-matching required. Keep this in sync with
+# routes.tsx when a route is added or removed.
+_REAL_ROUTES = {
+    "", "home", "signup", "signup-consumer", "signup-provider", "signup-simple",
+    "signup-minimal", "signup-original", "dashboard", "upload-documents", "success",
+    "terms", "hipaa-privacy", "privacy", "subscription-tiers", "trust", "help",
+    "new-patient-guide", "saved", "about", "utah", "prices", "profile", "settings",
+    "notifications", "audit-log", "admin", "provider-dashboard", "support-dashboard",
+    "providers", "provider-signup", "provider-verification-pending", "database-scan",
+}
+
 
 def _append_jsonl(path: Path, data: dict) -> None:
     """Best-effort append-only JSONL write. Never raises — a full disk or a
@@ -1558,7 +1578,10 @@ def _log_search_activity(query: str, result_count: int) -> None:
 
 
 def _log_page_view(path: str, user_agent: str) -> None:
-    """Append one real page load, unless it looks automated."""
+    """Append one real page load, unless it looks automated or isn't a
+    real Starkwell route (see _REAL_ROUTES above)."""
+    if path not in _REAL_ROUTES:
+        return
     if _BOT_UA_RE.search(user_agent or ""):
         return
     _append_jsonl(PAGE_VIEW_LOG, {
