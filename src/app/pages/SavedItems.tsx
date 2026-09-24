@@ -111,7 +111,7 @@ export function SavedItems() {
                             type="button"
                             onClick={() => removeService(s.service_key)}
                             aria-label={`Remove ${s.display_name} from saved`}
-                            className="p-1.5 text-gray-400 hover:text-red-600"
+                            className="p-1.5 text-gray-500 hover:text-red-600"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -151,7 +151,7 @@ export function SavedItems() {
                             type="button"
                             onClick={() => removeFacility(f.facility_key)}
                             aria-label={`Remove ${f.label} from saved`}
-                            className="p-1.5 text-gray-400 hover:text-red-600"
+                            className="p-1.5 text-gray-500 hover:text-red-600"
                           >
                             <X className="h-4 w-4" />
                           </button>

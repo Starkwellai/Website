@@ -39,6 +39,21 @@ import {
  *  facility. These "% who said Always / Yes / 9-10" fields are the ones
  *  that are actually populated (40-44 of 48), so they're what the dialog
  *  shows — real HCAHPS numbers, just not converted to a 1-5 star scale. */
+// Hand-picked, not algorithmically derived (e.g. "most billed") — the goal
+// is broad, recognizable starting points for someone who doesn't know
+// medical terminology, so every one needs to be a real display_name that's
+// verified to return results, not just whatever has the highest volume.
+const POPULAR_SEARCHES = [
+  "Annual physical / wellness exam",
+  "MRI - knee",
+  "Urgent care visit",
+  "Screening colonoscopy",
+  "Screening mammogram",
+  "Physical therapy session",
+  "Chest X-ray",
+  "EKG (electrocardiogram)",
+];
+
 const PATIENT_EXPERIENCE_MEASURES = new Set([
   "H_HSP_RATING_9_10", "H_RECMND_DY", "H_CLEAN_HSP_A_P", "H_QUIET_HSP_A_P",
   "H_COMP_1_A_P", "H_COMP_2_A_P", "H_COMP_6_Y_P",
@@ -101,7 +116,7 @@ function FullRangeInfo({ note }: { note: string | null }) {
           tabIndex={0}
           onClick={e => e.stopPropagation()}
           aria-label="Full price range, including outlier rates"
-          className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-400 hover:text-gray-600 cursor-pointer"
+          className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
         >
           <Info className="h-3 w-3" />
         </span>
@@ -129,7 +144,7 @@ function TermInfo({ text }: { text: string }) {
           tabIndex={0}
           onClick={e => e.stopPropagation()}
           aria-label="What this means"
-          className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-400 hover:text-gray-600 cursor-pointer"
+          className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
         >
           <Info className="h-3 w-3" />
         </span>
@@ -584,8 +599,10 @@ export function PriceSearch() {
               onSubmit={e => { e.preventDefault(); runSearch(query, category); }}
             >
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                <Label htmlFor="search-query" className="sr-only">Procedure, symptom, or lab test</Label>
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
                 <Input
+                  id="search-query"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   placeholder="MRI knee, colonoscopy, blood test…"
@@ -596,8 +613,10 @@ export function PriceSearch() {
                   Home already promises "procedure + location" together, and the
                   city stayed set once picked, so it should stay visible once picked. */}
               <div className="relative sm:w-56">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                <Label htmlFor="search-city" className="sr-only">City</Label>
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
                 <Input
+                  id="search-city"
                   value={city}
                   onChange={e => setCity(e.target.value)}
                   placeholder="City, e.g. PROVO"
@@ -621,7 +640,7 @@ export function PriceSearch() {
             that would appear in front of whoever is watching. The detail is
             still available, but folded away and sent to the console for us. */}
         {error && (
-          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div role="alert" className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <div className="min-w-0">
@@ -653,7 +672,7 @@ export function PriceSearch() {
             >
               <ArrowLeft className="h-4 w-4 mr-1" /> All procedures
             </Button>
-            <span className="text-gray-400">/</span>
+            <span className="text-gray-500">/</span>
             <button
               className="text-blue-600 hover:underline disabled:text-gray-900 disabled:no-underline"
               disabled={!facility}
@@ -663,7 +682,7 @@ export function PriceSearch() {
             </button>
             {facility && (
               <>
-                <span className="text-gray-400">/</span>
+                <span className="text-gray-500">/</span>
                 <span className="text-gray-900 font-medium">{facilityLabel(facility)}</span>
               </>
             )}
@@ -678,7 +697,7 @@ export function PriceSearch() {
                     then plan: a flat list of 158 plan names made it impossible
                     to find your own without already knowing its exact title. */}
                 <div>
-                  <Label className="text-sm font-semibold text-gray-900 mb-2 block">
+                  <Label htmlFor="insurance-carrier" className="text-sm font-semibold text-gray-900 mb-2 block">
                     Insurance carrier
                   </Label>
                   <Select
@@ -688,7 +707,7 @@ export function PriceSearch() {
                       setPlanId("");
                     }}
                   >
-                    <SelectTrigger><SelectValue placeholder="Select your carrier" /></SelectTrigger>
+                    <SelectTrigger id="insurance-carrier"><SelectValue placeholder="Select your carrier" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No plan — show list prices</SelectItem>
                       {issuers.map(i => (
@@ -700,11 +719,11 @@ export function PriceSearch() {
 
                 {issuer && (
                   <div>
-                    <Label className="text-sm font-semibold text-gray-900 mb-2 block">
+                    <Label htmlFor="insurance-plan" className="text-sm font-semibold text-gray-900 mb-2 block">
                       Your plan
                     </Label>
                     <Select value={planId || "none"} onValueChange={v => setPlanId(v === "none" ? "" : v)}>
-                      <SelectTrigger><SelectValue placeholder="Select your plan" /></SelectTrigger>
+                      <SelectTrigger id="insurance-plan"><SelectValue placeholder="Select your plan" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Select a plan…</SelectItem>
                         {plansForIssuer.map(p => (
@@ -748,7 +767,7 @@ export function PriceSearch() {
                 )}
 
                 <div>
-                  <Label className="text-sm font-semibold text-gray-900 mb-2 block">
+                  <Label htmlFor="category-filter" className="text-sm font-semibold text-gray-900 mb-2 block">
                     Category
                   </Label>
                   <Select
@@ -757,7 +776,7 @@ export function PriceSearch() {
                       setBrowseCategories([]); setBrowseKeys([]); setCategory(c);
                     }}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="category-filter"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All categories</SelectItem>
                       {categories.map(c => (
@@ -823,6 +842,32 @@ export function PriceSearch() {
           </div>
 
           <div className="lg:col-span-3">
+            {/* Shown only before anyone has typed anything — a blank search
+                box is the single biggest drop-off point for someone who
+                doesn't already know medical terminology. These are real,
+                well-covered catalog entries (picked by hand, not just
+                whatever has the most providers), so every one of them is
+                guaranteed to return results. */}
+            {!selected && !query.trim() && (
+              <div className="mb-5">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Not sure what to search for? Try one of these:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {POPULAR_SEARCHES.map(term => (
+                    <button
+                      key={term}
+                      type="button"
+                      onClick={() => { setQuery(term); runSearch(term, category); }}
+                      className="rounded-full border border-gray-300 bg-white px-3.5 py-1.5 text-sm text-gray-700 hover:border-blue-400 hover:text-blue-600"
+                    >
+                      {term}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Layer 1 — procedures */}
             {!selected && (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -899,7 +944,7 @@ export function PriceSearch() {
                         >
                           {aiLoading ? "Searching…" : "Find matching procedures"}
                         </Button>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500">
                           This description is sent to an AI service to help match it to a procedure.
                         </p>
                       </div>
@@ -1057,7 +1102,7 @@ export function PriceSearch() {
                       )}
 
                       {reviewsLoading && (
-                        <p className="text-sm text-gray-400 mt-3">Loading reviews…</p>
+                        <p className="text-sm text-gray-500 mt-3">Loading reviews…</p>
                       )}
 
                       {!reviewsLoading && reviews?.reviews.length === 0 && !showReviewForm && (
@@ -1085,7 +1130,7 @@ export function PriceSearch() {
                                 >
                                   {r.source === "starkwell" ? "Starkwell" : r.source}
                                 </Badge>
-                                <span className="text-xs text-gray-400">
+                                <span className="text-xs text-gray-500">
                                   {r.author_name || "Anonymous"} · {new Date(r.created_at).toLocaleDateString()}
                                 </span>
                               </div>
@@ -1193,7 +1238,7 @@ export function PriceSearch() {
                                     className={`shrink-0 rounded-md border p-1 transition disabled:opacity-30 disabled:cursor-not-allowed ${
                                       inCompare
                                         ? "bg-blue-600 border-blue-600 text-white"
-                                        : "bg-white border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300"}`}
+                                        : "bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300"}`}
                                   >
                                     <Scale className="h-3.5 w-3.5" />
                                   </button>
@@ -1289,7 +1334,7 @@ export function PriceSearch() {
                                       {formatPrice(f.your_cost)}
                                     </p>
                                     <p className="text-xs text-gray-500">you pay</p>
-                                    <p className="text-xs text-gray-400 mt-1">
+                                    <p className="text-xs text-gray-500 mt-1">
                                       {formatPrice(f.network_rate)} negotiated
                                     </p>
                                   </>
@@ -1337,7 +1382,7 @@ export function PriceSearch() {
                                   const cheaper = comparable && c.cash_price < (f.your_cost as number);
                                   return (
                                     <p className={`mt-1 text-xs ${
-                                      cheaper ? "font-semibold text-emerald-700" : "text-gray-400"}`}>
+                                      cheaper ? "font-semibold text-emerald-700" : "text-gray-500"}`}>
                                       {formatPrice(c.cash_price)} cash price
                                       {cheaper && " — less than your share"}
                                     </p>
@@ -1404,7 +1449,7 @@ export function PriceSearch() {
                                   className={`shrink-0 rounded-md border p-1 transition disabled:opacity-30 disabled:cursor-not-allowed ${
                                     inCompare
                                       ? "bg-blue-600 border-blue-600 text-white"
-                                      : "bg-white border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300"}`}
+                                      : "bg-white border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300"}`}
                                 >
                                   <Scale className="h-3.5 w-3.5" />
                                 </button>
@@ -1522,7 +1567,7 @@ export function PriceSearch() {
                     <button
                       type="button"
                       onClick={() => toggleCompareFacility(f)}
-                      className="shrink-0 text-gray-400 hover:text-gray-700"
+                      className="shrink-0 text-gray-500 hover:text-gray-700"
                       title="Remove"
                     >
                       <X className="h-4 w-4" />
@@ -1564,7 +1609,7 @@ export function PriceSearch() {
                   <button
                     type="button"
                     onClick={() => toggleCompareProvider(p)}
-                    className="shrink-0 text-gray-400 hover:text-gray-700"
+                    className="shrink-0 text-gray-500 hover:text-gray-700"
                     title="Remove"
                   >
                     <X className="h-4 w-4" />
@@ -1631,7 +1676,7 @@ export function PriceSearch() {
                               {m.score}%
                             </span>
                           ) : (
-                            <span className="text-xs text-gray-400 shrink-0">not enough surveys</span>
+                            <span className="text-xs text-gray-500 shrink-0">not enough surveys</span>
                           )}
                         </div>
                       ))}

@@ -242,8 +242,8 @@ export function Trust() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Nevada</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
               </ul>
             </div>
 

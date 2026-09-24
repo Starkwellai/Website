@@ -127,7 +127,7 @@ export function Home() {
               <CardContent className="p-2 rounded-[5px] bg-[#cbcbcb]">
                 <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-2">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
                     <Input
                       type="text"
                       placeholder="Condition, procedure, or doctor name"
@@ -137,7 +137,7 @@ export function Home() {
                     />
                   </div>
                   <div className="flex-1 relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
                     <Input
                       type="text"
                       placeholder="City, state, or zip code"
@@ -850,8 +850,8 @@ export function Home() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Nevada</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
               </ul>
             </div>
 

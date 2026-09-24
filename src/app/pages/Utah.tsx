@@ -303,7 +303,7 @@ export function Utah() {
               </div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
                   <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -402,18 +402,18 @@ export function Utah() {
                             <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center justify-between gap-4">
                               <div>
                                 <p className="font-medium text-gray-900">{d.ndc_description}</p>
-                                {d.otc === "Y" && <span className="text-xs text-gray-400">OTC</span>}
+                                {d.otc === "Y" && <span className="text-xs text-gray-500">OTC</span>}
                               </div>
                               <div className="text-right shrink-0">
                                 <p className="font-semibold text-blue-700">${d.nadac_per_unit.toFixed(4)}</p>
-                                <p className="text-xs text-gray-400">per {d.unit || "unit"}</p>
+                                <p className="text-xs text-gray-500">per {d.unit || "unit"}</p>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
-                    <p className="text-xs text-gray-400 text-center">NADAC = National Average Drug Acquisition Cost (CMS). Actual pharmacy prices may vary.</p>
+                    <p className="text-xs text-gray-500 text-center">NADAC = National Average Drug Acquisition Cost (CMS). Actual pharmacy prices may vary.</p>
                   </div>
                 ) : (
                   <div className="text-center py-16 text-gray-500">
@@ -459,7 +459,7 @@ export function Utah() {
                                 </span>
                               )}
                               {r.medicare_allowed > 0 && (
-                                <span className="flex items-center gap-1 text-gray-400">
+                                <span className="flex items-center gap-1 text-gray-500">
                                   Medicare allows {fmt(r.medicare_allowed)}
                                 </span>
                               )}
@@ -495,7 +495,7 @@ export function Utah() {
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-sm">
                                         <thead>
-                                          <tr className="text-left text-gray-400 border-b border-gray-200">
+                                          <tr className="text-left text-gray-500 border-b border-gray-200">
                                             <th className="pb-2 font-medium">Payer</th>
                                             <th className="pb-2 font-medium text-right">Providers</th>
                                             <th className="pb-2 font-medium text-right">Min</th>
@@ -789,7 +789,7 @@ export function Utah() {
                                         <div key={m.setting} className="bg-white rounded-lg px-4 py-2 border border-gray-200 text-sm">
                                           <span className="text-gray-500">{m.setting}: </span>
                                           <span className="font-medium">allows {fmt(m.allowed)}</span>
-                                          {m.pays > 0 && <span className="text-gray-400">, pays {fmt(m.pays)}</span>}
+                                          {m.pays > 0 && <span className="text-gray-500">, pays {fmt(m.pays)}</span>}
                                         </div>
                                       ))}
                                     </div>
@@ -1019,11 +1019,11 @@ export function Utah() {
                                 )}
 
                                 {detail.payer_rates.length === 0 && !detail.uofu_hospital && detail.hca_hospitals.length === 0 && !detail.intermountain_hospitals?.length && !detail.revere_health?.length && !detail.ashley_regional?.length && !detail.tanner_clinic?.length && !detail.quest_health?.length && !detail.encompass_health?.length && !detail.utah_state_hospital?.length && !detail.uofu_student_health?.length && !detail.castleview?.length && !detail.uintah_basin?.length && !detail.mountain_west?.length && !detail.central_valley?.length && !detail.milford?.length && !detail.blue_mountain?.length && !detail.gunnison_valley?.length && !detail.kane_county?.length && !detail.beaver_valley?.length && !detail.wayne_county?.length && !detail.san_juan?.length && !detail.moab_regional?.length && !detail.holy_cross?.length && !detail.ascent_behavioral?.length && !detail.ernest_health?.length && (
-                                  <p className="text-sm text-gray-400 py-2">No rate data found for this code yet.</p>
+                                  <p className="text-sm text-gray-500 py-2">No rate data found for this code yet.</p>
                                 )}
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-400 py-2">Could not load rates — is the API running?</p>
+                              <p className="text-sm text-gray-500 py-2">Could not load rates — is the API running?</p>
                             )}
                           </div>
                         )}
@@ -1317,8 +1317,8 @@ export function Utah() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-400">Coming Soon: Nevada</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
+                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
               </ul>
             </div>
 
