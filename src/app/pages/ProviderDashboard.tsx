@@ -24,7 +24,7 @@ import {
   Mail,
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
-import { PHIIndicator, EncryptionBadge } from "../components/PHIIndicator";
+import { PHIIndicator } from "../components/PHIIndicator";
 import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount } from "../../lib/starkwell";
 
 /**
@@ -37,10 +37,13 @@ import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount 
  * only exposes public pricing data), so every one of those sections below
  * is an honest empty state instead.
  *
- * Identity here comes from the real provider-account session (see
+ * Identity here comes from a real provider-account session (see
  * getCurrentProviderAccount in src/lib/starkwell.ts), not from the mock
- * UserContext the rest of the role-gated dashboards still use — this is the
- * one dashboard with a real login behind it now.
+ * UserContext the rest of the role-gated dashboards still use. No password
+ * yet, by design — see the note above provider_accounts in
+ * api/serving_api.py — so "signed in" currently just means this browser
+ * holds a valid session token from signup; redirects to /provider-signup,
+ * not a login page, when there isn't one.
  */
 export function ProviderDashboard() {
   const navigate = useNavigate();
@@ -54,14 +57,14 @@ export function ProviderDashboard() {
       .then((acct) => {
         if (cancelled) return;
         if (!acct) {
-          navigate("/provider-login");
+          navigate("/provider-signup");
           return;
         }
         setAccount(acct);
         setCheckingAuth(false);
       })
       .catch(() => {
-        if (!cancelled) navigate("/provider-login");
+        if (!cancelled) navigate("/provider-signup");
       });
     return () => {
       cancelled = true;
@@ -144,7 +147,6 @@ export function ProviderDashboard() {
                 {account.practice_name} · No scheduling or patient-record backend is connected yet.
               </p>
             </div>
-            <EncryptionBadge />
           </div>
         </div>
 
@@ -264,7 +266,7 @@ export function ProviderDashboard() {
                     disabled
                   />
                 </div>
-                <PHIIndicator type="banner" showEncrypted={false} />
+                <PHIIndicator type="banner" />
                 <p className="text-xs text-gray-500 mt-2">
                   Search is disabled — no patient-record backend is connected.
                 </p>

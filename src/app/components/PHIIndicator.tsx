@@ -1,10 +1,9 @@
-import { Shield, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, Eye, EyeOff } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { useState } from "react";
 
 interface PHIIndicatorProps {
   type?: 'badge' | 'banner' | 'inline';
-  showEncrypted?: boolean;
 }
 
 /**
@@ -12,8 +11,13 @@ interface PHIIndicatorProps {
  * admin/provider/support pages. Purely presentational — it does not gate
  * access to anything; it labels sections that would carry PHI once a real
  * backend exists.
+ *
+ * Deliberately makes no claim about encryption: the site has no HTTPS yet
+ * (see api/serving_api.py's provider-accounts note), so "encrypted in
+ * transit" would be false. This used to say exactly that, behind a
+ * showEncrypted prop that defaulted to true everywhere except one page.
  */
-export function PHIIndicator({ type = 'badge', showEncrypted = true }: PHIIndicatorProps) {
+export function PHIIndicator({ type = 'badge' }: PHIIndicatorProps) {
   if (type === 'banner') {
     return (
       <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4">
@@ -23,12 +27,8 @@ export function PHIIndicator({ type = 'badge', showEncrypted = true }: PHIIndica
             <h4 className="font-semibold text-blue-900 mb-1">Protected Health Information (PHI)</h4>
             <p className="text-sm text-blue-800">
               This section contains sensitive health data protected under HIPAA regulations.
-              {showEncrypted && " All data is encrypted in transit and at rest."}
             </p>
           </div>
-          {showEncrypted && (
-            <Lock className="size-5 text-green-600 flex-shrink-0" />
-          )}
         </div>
       </div>
     );
@@ -93,11 +93,6 @@ export function MaskedData({ data, maskType = 'partial', canUnmask = true, label
   );
 }
 
-export function EncryptionBadge() {
-  return (
-    <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs font-semibold border border-green-200">
-      <Lock className="size-3" />
-      <span>Encrypted & Secure</span>
-    </div>
-  );
-}
+// EncryptionBadge used to live here, rendering "Encrypted & Secure" on
+// every page below -- removed rather than fixed in place, since there's no
+// accurate positive claim to put there instead (the site has no HTTPS yet).

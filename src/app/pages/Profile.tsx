@@ -29,7 +29,7 @@ import {
   FileText,
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
-import { PHIIndicator, MaskedData, EncryptionBadge } from "../components/PHIIndicator";
+import { PHIIndicator, MaskedData } from "../components/PHIIndicator";
 import { useUser } from "../contexts/UserContext";
 
 /**
@@ -151,7 +151,6 @@ export function Profile() {
               <p className="text-sm md:text-base text-gray-600">View and manage your public profile information</p>
             </div>
             <div className="flex items-center gap-2">
-              <EncryptionBadge />
               <Button
                 onClick={() => setIsEditing(!isEditing)}
                 variant={isEditing ? "outline" : "default"}

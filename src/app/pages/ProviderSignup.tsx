@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -12,7 +12,7 @@ import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { LegalDocumentModal } from "../components/LegalDocumentModal";
 import { TermsContent } from "../components/legal/TermsContent";
 import { PrivacyContent } from "../components/legal/PrivacyContent";
-import { signupProviderAccount } from "../../lib/starkwell";
+import { getCurrentProviderAccount, signupProviderAccount } from "../../lib/starkwell";
 
 /**
  * Real account creation: this submits to POST /api/provider-signup and gets
@@ -51,8 +51,6 @@ export function ProviderSignup() {
     practiceName: "",
     contactName: "",
     email: "",
-    password: "",
-    confirmPassword: "",
     phone: "",
     npi: "",
     specialty: "",
@@ -68,6 +66,19 @@ export function ProviderSignup() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // If this browser already holds a valid session (signed up here before),
+  // skip straight to the dashboard instead of showing an empty form that
+  // would just fail with "account already exists" on submit.
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentProviderAccount().then((acct) => {
+      if (!cancelled && acct) navigate("/provider-dashboard");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -80,14 +91,6 @@ export function ProviderSignup() {
     e.preventDefault();
     setError(null);
 
-    if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords don't match.");
-      return;
-    }
     if (!acceptedTerms || !acceptedPrivacy) {
       setError("Please accept the Terms and Privacy Policy to continue.");
       return;
@@ -99,7 +102,6 @@ export function ProviderSignup() {
         practice_name: formData.practiceName,
         contact_name: formData.contactName,
         email: formData.email,
-        password: formData.password,
         phone: formData.phone || undefined,
         npi: formData.npi || undefined,
         specialty: formData.specialty || undefined,
@@ -206,25 +208,6 @@ export function ProviderSignup() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="password" className="text-blue-900">Password</Label>
-                        <Input
-                          id="password" name="password" type="password" placeholder="At least 8 characters"
-                          value={formData.password} onChange={handleChange} required minLength={8}
-                          className="border-blue-200 focus:border-blue-500"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirmPassword" className="text-blue-900">Confirm password</Label>
-                        <Input
-                          id="confirmPassword" name="confirmPassword" type="password" placeholder="Re-enter password"
-                          value={formData.confirmPassword} onChange={handleChange} required minLength={8}
-                          className="border-blue-200 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
                         <Label htmlFor="city" className="text-blue-900">City</Label>
                         <Input
                           id="city" name="city" placeholder="Salt Lake City"
@@ -315,10 +298,9 @@ export function ProviderSignup() {
                     </Button>
 
                     <p className="text-xs text-center text-gray-500">
-                      Already have an account?{" "}
-                      <button type="button" onClick={() => navigate("/provider-login")} className="text-blue-600 hover:underline font-medium">
-                        Sign in
-                      </button>
+                      Already signed up? Come back to this page on the same device and browser
+                      you used originally — your dashboard will open automatically. Signing in
+                      from a different device isn't available yet.
                     </p>
                   </form>
                 </CardContent>

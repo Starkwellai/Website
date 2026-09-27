@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import type { AuditLogEntry } from "../types/user";
-import { EncryptionBadge } from "../components/PHIIndicator";
 
 /**
  * Activity/audit log page.
@@ -126,7 +125,6 @@ export function AuditLog() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Activity & Audit Log</h1>
               <p className="text-gray-600">View your account activity and data access history</p>
             </div>
-            <EncryptionBadge />
           </div>
 
           <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-6">

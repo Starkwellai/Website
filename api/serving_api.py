@@ -2351,6 +2351,17 @@ def _verify_password(password: str, password_hash: str, salt: str) -> bool:
     return secrets.compare_digest(computed, password_hash)
 
 
+# Fixed reference salt for the "no such account" / "no password set" branches
+# of provider_login below. Without this, those branches return in the time a
+# single indexed SQLite lookup takes, while a real password check runs a
+# 260,000-iteration PBKDF2 first -- a gap wide enough (tens of milliseconds)
+# to let a caller distinguish "this email has a real account" from "it
+# doesn't" purely by timing, without ever seeing it in the response body.
+# Hashing the incoming password against this dummy salt on every rejected
+# login, real account or not, keeps the two paths' timing the same.
+_DUMMY_PASSWORD_SALT = secrets.token_hex(16)
+
+
 def _create_session(con: sqlite3.Connection, provider_id: int) -> str:
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
@@ -2467,9 +2478,13 @@ def provider_login(body: ProviderLoginBody, request: Request):
             (email,),
         ).fetchone()
         if row is None or row["password_hash"] is None:
-            # Same message either way — confirming "that email exists but has
-            # no password yet" to an unauthenticated caller would leak which
-            # emails are registered.
+            # Same message AND same cost either way -- hash against a dummy
+            # salt so this branch takes as long as a real password check.
+            # Otherwise "account doesn't exist / has no password" returns
+            # near-instantly while a real check runs a 260k-iteration PBKDF2
+            # first, and that timing gap alone reveals which emails have a
+            # real account without the response body ever saying so.
+            _hash_password(body.password, _DUMMY_PASSWORD_SALT)
             raise HTTPException(401, "Incorrect email or password.")
         if not _verify_password(body.password, row["password_hash"], row["password_salt"]):
             raise HTTPException(401, "Incorrect email or password.")

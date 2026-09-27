@@ -25,7 +25,7 @@ import {
   Server,
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
-import { PHIIndicator, EncryptionBadge } from "../components/PHIIndicator";
+import { PHIIndicator } from "../components/PHIIndicator";
 import { RoleSwitcher } from "../components/RoleSwitcher";
 
 /**
@@ -113,7 +113,6 @@ export function AdminDashboard() {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">HIPAA Compliance Dashboard</h1>
               <p className="text-sm md:text-base text-gray-600">Monitor system compliance, security, and access controls</p>
             </div>
-            <EncryptionBadge />
           </div>
           <div className="bg-amber-50 border-l-4 border-amber-500 p-4 text-sm text-amber-900">
             No admin/compliance backend is connected yet. Every metric below is a placeholder

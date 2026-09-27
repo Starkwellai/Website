@@ -46,7 +46,6 @@ import {
   CheckCircle,
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
-import { EncryptionBadge } from "../components/PHIIndicator";
 import { useUser } from "../contexts/UserContext";
 
 /**
@@ -190,7 +189,6 @@ export function Settings() {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
               <p className="text-sm md:text-base text-gray-600">Manage your account configuration and preferences</p>
             </div>
-            <EncryptionBadge />
           </div>
         </div>
 

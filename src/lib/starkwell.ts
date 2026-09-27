@@ -624,7 +624,12 @@ export async function signupProviderAccount(data: {
   practice_name: string;
   contact_name: string;
   email: string;
-  password: string;
+  // No password today -- see the "provider accounts" note in
+  // api/serving_api.py: the site has no HTTPS yet, so a password would
+  // travel in plaintext, and this field is dropped from the signup form
+  // entirely rather than accept one insecurely. Still typed as optional
+  // (not removed) so re-enabling it once HTTPS exists is additive.
+  password?: string;
   phone?: string;
   npi?: string;
   specialty?: string;
