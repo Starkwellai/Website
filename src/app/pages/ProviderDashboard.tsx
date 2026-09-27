@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -25,8 +25,7 @@ import {
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { PHIIndicator, EncryptionBadge } from "../components/PHIIndicator";
-import { RoleSwitcher } from "../components/RoleSwitcher";
-import { useUser } from "../contexts/UserContext";
+import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount } from "../../lib/starkwell";
 
 /**
  * Provider-facing dashboard shell.
@@ -37,15 +36,52 @@ import { useUser } from "../contexts/UserContext";
  * There is no scheduling/EHR backend in this project (src/lib/starkwell.ts
  * only exposes public pricing data), so every one of those sections below
  * is an honest empty state instead.
+ *
+ * Identity here comes from the real provider-account session (see
+ * getCurrentProviderAccount in src/lib/starkwell.ts), not from the mock
+ * UserContext the rest of the role-gated dashboards still use — this is the
+ * one dashboard with a real login behind it now.
  */
 export function ProviderDashboard() {
   const navigate = useNavigate();
-  const { user } = useUser();
   const [searchQuery, setSearchQuery] = useState("");
+  const [account, setAccount] = useState<ProviderAccount | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const providerName = user?.firstName || user?.lastName
-    ? `${user.firstName} ${user.lastName}`.trim()
-    : "your account";
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentProviderAccount()
+      .then((acct) => {
+        if (cancelled) return;
+        if (!acct) {
+          navigate("/provider-login");
+          return;
+        }
+        setAccount(acct);
+        setCheckingAuth(false);
+      })
+      .catch(() => {
+        if (!cancelled) navigate("/provider-login");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  const handleLogout = () => {
+    void logoutProviderAccount();
+    navigate("/");
+  };
+
+  if (checkingAuth || !account) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 text-sm">
+        Loading your dashboard…
+      </div>
+    );
+  }
+
+  const providerName = account.contact_name || account.practice_name;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,7 +96,6 @@ export function ProviderDashboard() {
               onClick={() => navigate("/")}
             />
             <div className="flex items-center gap-2 md:gap-4">
-              <RoleSwitcher />
               <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50">
                 Provider Access
               </Badge>
@@ -87,7 +122,7 @@ export function ProviderDashboard() {
                     <span>Activity Log</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/")}>
+                  <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>
                   </DropdownMenuItem>
@@ -102,9 +137,11 @@ export function ProviderDashboard() {
         <div className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Provider Dashboard</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                Welcome, {providerName}
+              </h1>
               <p className="text-sm md:text-base text-gray-600">
-                No scheduling or patient-record backend is connected yet.
+                {account.practice_name} · No scheduling or patient-record backend is connected yet.
               </p>
             </div>
             <EncryptionBadge />

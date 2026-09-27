@@ -27,6 +27,7 @@ import { SupportDashboard } from "./pages/SupportDashboard";
 import { Notifications } from "./pages/Notifications";
 import { Settings } from "./pages/Settings";
 import { ProviderSignup } from "./pages/ProviderSignup";
+import { ProviderLogin } from "./pages/ProviderLogin";
 import { ProvidersLanding } from "./pages/ProvidersLanding";
 import { ProviderVerificationPending } from "./pages/ProviderVerificationPending";
 import { DatabaseScan } from "./pages/DatabaseScan";
@@ -146,6 +147,8 @@ export const router = createBrowserRouter([
   // Role-gated dashboards. Role state is local/mock only (UserContext) —
   // there is no real auth backend, so these routes are not actually gated,
   // only styled as if a role check happened. See RoleSwitcher to preview each.
+  // Exception: /provider-dashboard now checks a real session itself (see
+  // ProviderDashboard.tsx) and redirects to /provider-login if there isn't one.
   {
     path: "/admin",
     element: <AdminDashboard />,
@@ -170,6 +173,10 @@ export const router = createBrowserRouter([
   {
     path: "/provider-signup",
     element: <ProviderSignup />,
+  },
+  {
+    path: "/provider-login",
+    element: <ProviderLogin />,
   },
   {
     path: "/provider-verification-pending",

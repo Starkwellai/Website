@@ -47,11 +47,12 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -2283,6 +2284,219 @@ def get_reviews(facility_key: str):
         for src, ratings in by_source.items()
     }
     return {"facility_key": facility_key, "sources": sources, "reviews": reviews}
+
+
+# ---- provider accounts -----------------------------------------------------
+# Real accounts, deliberately passwordless for now. There is no SMTP/
+# transactional-email service configured anywhere in this project yet (see
+# DEPLOY.md), which means two things a password normally needs can't work:
+# confirming the signer-upper actually owns the email they typed, and a
+# self-service "forgot password" flow. A password with neither of those
+# behind it is weaker than it looks, so signup instead issues a session
+# token immediately — the account is real and persistent, "logged in" just
+# means "this browser holds a valid token" rather than "this password was
+# checked." password_hash/password_salt are already columns on the table and
+# ProviderLoginBody/provider_login already exist below, so turning on real
+# password login later (once email exists to back it) is additive: start
+# collecting `password` at signup and nothing here needs to change shape.
+# Hashing uses stdlib PBKDF2-HMAC-SHA256 with a random per-account salt
+# rather than pulling in bcrypt/argon2 as a new dependency — 260,000
+# iterations matches Django's current default and is fine at this scale.
+PROVIDER_ACCOUNTS_DB_PATH = SEARCH_LOG_DIR / "provider_accounts.db"
+
+PASSWORD_HASH_ITERATIONS = 260_000
+SESSION_LIFETIME_DAYS = 30
+
+
+def _provider_db() -> sqlite3.Connection:
+    PROVIDER_ACCOUNTS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(PROVIDER_ACCOUNTS_DB_PATH, timeout=10)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS provider_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            practice_name TEXT NOT NULL,
+            contact_name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT,
+            password_salt TEXT,
+            phone TEXT,
+            npi TEXT,
+            specialty TEXT,
+            city TEXT,
+            state TEXT,
+            message TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS provider_sessions (
+            token TEXT PRIMARY KEY,
+            provider_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+    """)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), PASSWORD_HASH_ITERATIONS)
+    return digest.hex(), salt
+
+
+def _verify_password(password: str, password_hash: str, salt: str) -> bool:
+    computed, _ = _hash_password(password, salt)
+    return secrets.compare_digest(computed, password_hash)
+
+
+def _create_session(con: sqlite3.Connection, provider_id: int) -> str:
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=SESSION_LIFETIME_DAYS)
+    con.execute(
+        "INSERT INTO provider_sessions (token, provider_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        (token, provider_id, now.isoformat(), expires.isoformat()),
+    )
+    return token
+
+
+_PROVIDER_PUBLIC_COLUMNS = (
+    "id, practice_name, contact_name, email, phone, npi, specialty, city, state, created_at"
+)
+
+
+def _require_provider(request: Request) -> dict:
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Not signed in.")
+    token = auth[len("Bearer "):].strip()
+    con = _provider_db()
+    try:
+        session = con.execute(
+            "SELECT provider_id, expires_at FROM provider_sessions WHERE token = ?", (token,)
+        ).fetchone()
+        if session is None or datetime.fromisoformat(session["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(401, "Session expired or invalid — please sign in again.")
+        provider = con.execute(
+            f"SELECT {_PROVIDER_PUBLIC_COLUMNS} FROM provider_accounts WHERE id = ?", (session["provider_id"],)
+        ).fetchone()
+        if provider is None:
+            raise HTTPException(401, "Session expired or invalid — please sign in again.")
+        return dict(provider)
+    finally:
+        con.close()
+
+
+# Same reasoning as the AI-search and review rate limiters elsewhere in this
+# file: single uvicorn worker, so in-process state is fine, and it resets on
+# redeploy which only matters for abuse, not correctness.
+_provider_auth_rate_state: dict[str, list[float]] = {}
+
+
+def _check_provider_auth_rate_limit(ip: str, limit: int = 8, window: float = 300.0) -> None:
+    now = time.time()
+    hits = [t for t in _provider_auth_rate_state.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(429, "Too many attempts — try again in a few minutes.")
+    hits.append(now)
+    _provider_auth_rate_state[ip] = hits
+
+
+class ProviderSignupBody(BaseModel):
+    practice_name: str = Field(..., min_length=1, max_length=200)
+    contact_name: str = Field(..., min_length=1, max_length=120)
+    email: str = Field(..., min_length=3, max_length=200)
+    # Optional on purpose — see the "provider accounts" note above. Signup
+    # works with no password today; a future signup form can start sending
+    # one without any backend change.
+    password: Optional[str] = Field(None, min_length=8, max_length=200)
+    phone: Optional[str] = Field(None, max_length=40)
+    npi: Optional[str] = Field(None, max_length=10)
+    specialty: Optional[str] = Field(None, max_length=120)
+    city: Optional[str] = Field(None, max_length=120)
+    state: Optional[str] = Field(None, max_length=2)
+    message: Optional[str] = Field(None, max_length=1000)
+
+
+class ProviderLoginBody(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    password: str = Field(..., min_length=1, max_length=200)
+
+
+@app.post("/api/provider-signup")
+def provider_signup(body: ProviderSignupBody, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_provider_auth_rate_limit(client_ip)
+    email = body.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(422, "Enter a valid email address.")
+    con = _provider_db()
+    try:
+        if con.execute("SELECT id FROM provider_accounts WHERE email = ?", (email,)).fetchone():
+            raise HTTPException(409, "An account with this email already exists — try signing in instead.")
+        if body.password:
+            password_hash, salt = _hash_password(body.password)
+        else:
+            password_hash, salt = None, None
+        now = datetime.now(timezone.utc).isoformat()
+        cur = con.execute(
+            "INSERT INTO provider_accounts "
+            "(practice_name, contact_name, email, password_hash, password_salt, phone, npi, specialty, "
+            " city, state, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (body.practice_name.strip(), body.contact_name.strip(), email, password_hash, salt,
+             body.phone, body.npi, body.specialty, body.city, body.state, body.message, now),
+        )
+        token = _create_session(con, cur.lastrowid)
+        con.commit()
+    finally:
+        con.close()
+    return {"token": token, "practice_name": body.practice_name.strip(), "contact_name": body.contact_name.strip(), "email": email}
+
+
+@app.post("/api/provider-login")
+def provider_login(body: ProviderLoginBody, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_provider_auth_rate_limit(client_ip)
+    email = body.email.strip().lower()
+    con = _provider_db()
+    try:
+        row = con.execute(
+            "SELECT id, practice_name, contact_name, password_hash, password_salt FROM provider_accounts WHERE email = ?",
+            (email,),
+        ).fetchone()
+        if row is None or row["password_hash"] is None:
+            # Same message either way — confirming "that email exists but has
+            # no password yet" to an unauthenticated caller would leak which
+            # emails are registered.
+            raise HTTPException(401, "Incorrect email or password.")
+        if not _verify_password(body.password, row["password_hash"], row["password_salt"]):
+            raise HTTPException(401, "Incorrect email or password.")
+        token = _create_session(con, row["id"])
+        con.commit()
+    finally:
+        con.close()
+    return {"token": token, "practice_name": row["practice_name"], "contact_name": row["contact_name"], "email": email}
+
+
+@app.get("/api/provider/me")
+def provider_me(request: Request):
+    return _require_provider(request)
+
+
+@app.post("/api/provider/logout")
+def provider_logout(request: Request):
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[len("Bearer "):].strip()
+        con = _provider_db()
+        try:
+            con.execute("DELETE FROM provider_sessions WHERE token = ?", (token,))
+            con.commit()
+        finally:
+            con.close()
+    return {"ok": True}
 
 
 @app.get("/api/services/{service_key}/cash")

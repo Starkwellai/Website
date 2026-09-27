@@ -553,3 +553,131 @@ export function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return `$${Math.round(n).toLocaleString()}`;
 }
+
+/**
+ * Provider ACCOUNT auth (a clinic logging into its own Starkwell account) —
+ * not to be confused with getProvider()/getProviders() above, which look up
+ * a medical provider's NPI in the public pricing dataset. Real signup/login
+ * with a real hashed password on the server, but there is no email sending
+ * configured anywhere in this project yet, so there is no email-verification
+ * step and no self-service "forgot password" — see api/serving_api.py.
+ */
+
+export interface ProviderAccount {
+  id: number;
+  practice_name: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  npi: string | null;
+  specialty: string | null;
+  city: string | null;
+  state: string | null;
+  created_at: string;
+}
+
+const PROVIDER_TOKEN_KEY = "starkwell_provider_token";
+
+export function getProviderAuthToken(): string | null {
+  try {
+    return localStorage.getItem(PROVIDER_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setProviderAuthToken(token: string): void {
+  try {
+    localStorage.setItem(PROVIDER_TOKEN_KEY, token);
+  } catch {
+    // Private-browsing/blocked storage: the session just won't persist across reloads.
+  }
+}
+
+export function clearProviderAuthToken(): void {
+  try {
+    localStorage.removeItem(PROVIDER_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+async function readErrorDetail(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed?.detail === "string") return parsed.detail;
+  } catch {
+    // not JSON — fall through to raw text
+  }
+  return text || `${res.status} ${res.statusText}`;
+}
+
+interface ProviderAuthResult {
+  token: string;
+  practice_name: string;
+  contact_name: string;
+  email: string;
+}
+
+export async function signupProviderAccount(data: {
+  practice_name: string;
+  contact_name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  npi?: string;
+  specialty?: string;
+  city?: string;
+  state?: string;
+  message?: string;
+}): Promise<ProviderAuthResult> {
+  const res = await fetch(`${BASE}/provider-signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  const result: ProviderAuthResult = await res.json();
+  setProviderAuthToken(result.token);
+  return result;
+}
+
+export async function loginProviderAccount(email: string, password: string): Promise<ProviderAuthResult> {
+  const res = await fetch(`${BASE}/provider-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  const result: ProviderAuthResult = await res.json();
+  setProviderAuthToken(result.token);
+  return result;
+}
+
+/** Returns null when signed out or the session has expired — never throws for that case. */
+export async function getCurrentProviderAccount(): Promise<ProviderAccount | null> {
+  const token = getProviderAuthToken();
+  if (!token) return null;
+  const res = await fetch(`${BASE}/provider/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 401) {
+    clearProviderAuthToken();
+    return null;
+  }
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  return res.json();
+}
+
+export async function logoutProviderAccount(): Promise<void> {
+  const token = getProviderAuthToken();
+  clearProviderAuthToken();
+  if (!token) return;
+  await fetch(`${BASE}/provider/logout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {
+    // Best-effort server-side session cleanup — the client-side token is already cleared either way.
+  });
+}

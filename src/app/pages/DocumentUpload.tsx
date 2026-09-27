@@ -74,7 +74,7 @@ export function DocumentUpload() {
           <CardHeader>
             <CardTitle className="text-2xl text-blue-900">Upload Insurance Documents</CardTitle>
             <CardDescription>
-              Securely upload your insurance cards and other healthcare documents. All files are encrypted and HIPAA compliant.
+              This is a preview of document upload — files you add here stay in your browser and aren't sent to us yet. Real secure storage is coming soon.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
