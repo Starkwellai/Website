@@ -1628,6 +1628,7 @@ def _services_rows(
 
 @app.get("/api/services")
 def services(
+    request: Request,
     q_: str = Query("", alias="q", description="free-text procedure search"),
     category: Optional[str] = None,
     categories: Optional[str] = Query(
@@ -1690,7 +1691,8 @@ def services(
     loose_tokens = _loose_match_tokens(q_, tokens)
     if not loose_tokens:
         _log_search_activity(q_, 0)
-        return {"query": q_, "results": []}
+        client_ip = request.client.host if request.client else "unknown"
+        return {"query": q_, "results": [], "search_token": _issue_zero_result_token(client_ip)}
     or_where = list(base_where)
     or_params = list(base_params)
     or_clause = " OR ".join(
@@ -1718,6 +1720,9 @@ def services(
     order_by = f"({relevance_expr}) DESC, providers DESC"
     final_rows = _services_rows(or_where, or_params + relevance_params, limit, order_by=order_by)
     _log_search_activity(q_, len(final_rows))
+    if not final_rows:
+        client_ip = request.client.host if request.client else "unknown"
+        return {"query": q_, "results": [], "search_token": _issue_zero_result_token(client_ip)}
     return {"query": q_, "results": final_rows}
 
 
@@ -1820,8 +1825,45 @@ def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
     _rate_state[ip] = hits
 
 
+# Gates /api/services/ai-search behind proof that a real /api/services call
+# just returned zero results -- without this, the endpoint is a standalone
+# door any caller can knock on directly with arbitrary text, skipping the
+# site (and every dollar of LLM cost that implies) entirely. The mass
+# internet-wide scanners this project has already dealt with (see
+# _log_page_view above) hit predictable, generic paths -- they have no
+# reason to first make a real search request, read a token out of its
+# response, and echo it back, so this closes off that whole category of
+# blind automated abuse for free. It does not stop a targeted attacker who
+# reads the frontend bundle and replicates the two-step flow; the per-IP
+# rate limit above and the account-wide spending cap on the Anthropic key
+# itself are what bound that case.
+_ZERO_RESULT_TOKEN_TTL = 120.0
+_zero_result_tokens: dict[str, dict] = {}
+
+
+def _issue_zero_result_token(ip: str) -> str:
+    now = time.time()
+    expired = [t for t, v in _zero_result_tokens.items() if v["expires_at"] < now]
+    for t in expired:
+        del _zero_result_tokens[t]
+    token = secrets.token_urlsafe(24)
+    _zero_result_tokens[token] = {"ip": ip, "expires_at": now + _ZERO_RESULT_TOKEN_TTL}
+    return token
+
+
+def _consume_zero_result_token(token: str, ip: str) -> bool:
+    """Single-use: valid tokens are removed the moment they're checked,
+    whether or not the check succeeds, so one real zero-result search can
+    never authorize more than one ai-search call."""
+    entry = _zero_result_tokens.pop(token, None)
+    if entry is None or entry["expires_at"] < time.time() or entry["ip"] != ip:
+        return False
+    return True
+
+
 class AISearchBody(BaseModel):
     query: str = Field(..., min_length=3, max_length=300)
+    search_token: str = Field(..., min_length=1, max_length=100)
 
 
 @app.post("/api/services/ai-search")
@@ -1838,6 +1880,8 @@ def ai_search(body: AISearchBody, request: Request):
 
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(client_ip)
+    if not _consume_zero_result_token(body.search_token, client_ip):
+        raise HTTPException(403, "This endpoint requires a recent search that returned no results.")
 
     catalog = _catalog()
     try:

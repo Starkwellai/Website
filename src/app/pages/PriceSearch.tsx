@@ -20,7 +20,7 @@ import { ProviderMap, type MapPoint } from "../components/ProviderMap";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
-  searchServices, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
+  searchServicesWithToken, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
   getCashPrices, getFacilityQuality, getFacilityReviews, submitFacilityReview,
   formatPrice, isPreciseLocation, facilityLabel, googleMapsSearchUrl, isHSA,
   EVIDENCE_LABEL, SORT_LABEL,
@@ -305,6 +305,10 @@ export function PriceSearch() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Proof-of-a-real-search token for the AI fallback (see runSearch/
+  // runAiSearch below and searchServicesWithToken in src/lib/starkwell.ts) —
+  // only ever set when a real keyword search just returned zero results.
+  const [searchToken, setSearchToken] = useState<string | null>(null);
 
   // Compare tray. Scoped to one layer at a time — comparing a hospital
   // against an individual physician isn't a like-for-like question, so
@@ -450,13 +454,15 @@ export function PriceSearch() {
     setLoading(true); setError(null);
     setSelected(null); setFacility(null); setFacilities([]); setProviders([]);
     setCompareFacilities([]); setCompareProviders([]);
-    setAiQuery(""); setAiTried(false); setAiError(null);
+    setAiQuery(""); setAiTried(false); setAiError(null); setSearchToken(null);
     try {
-      setServices(await searchServices(q, {
+      const r = await searchServicesWithToken(q, {
         category: cat === "all" ? undefined : cat, limit: 24,
         categories: browseCategories.length ? browseCategories : undefined,
         keys: browseKeys.length ? browseKeys : undefined,
-      }));
+      });
+      setServices(r.results);
+      setSearchToken(r.searchToken);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -466,9 +472,17 @@ export function PriceSearch() {
   // results (see the empty-results branch below) — never runs on the main
   // search path, so a slow/unavailable AI call can't affect normal search.
   async function runAiSearch() {
+    if (!searchToken) {
+      // Shouldn't happen — this box only renders after a zero-result
+      // search set one — but fail honestly rather than call the server
+      // with nothing and let it reject with a generic error.
+      setAiError("Please run a search first.");
+      setAiTried(true);
+      return;
+    }
     setAiLoading(true); setAiError(null);
     try {
-      const r = await aiSearchServices(aiQuery);
+      const r = await aiSearchServices(aiQuery, searchToken);
       if (!r.enabled) {
         setAiError("AI search isn't turned on for this site yet — try the exact procedure name.");
       } else if (r.error) {

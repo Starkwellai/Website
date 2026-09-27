@@ -440,25 +440,45 @@ async function get<T>(path: string, params?: Record<string, string | number | bo
 }
 
 /** Procedure-first search — the product's entry point. */
-export async function searchServices(
+interface ServicesSearchOpts {
+  category?: string;
+  /** Matches ANY of these categories — for a browse grouping that spans
+   *  several real categories (e.g. Home's "Specialist" tile). */
+  categories?: string[];
+  /** Exact service_key list — for a hand-curated set that doesn't map to
+   *  any single category (e.g. "Elective Surgery"). */
+  keys?: string[];
+  limit?: number;
+}
+
+async function _searchServicesRaw(
   query: string,
-  opts: {
-    category?: string;
-    /** Matches ANY of these categories — for a browse grouping that spans
-     *  several real categories (e.g. Home's "Specialist" tile). */
-    categories?: string[];
-    /** Exact service_key list — for a hand-curated set that doesn't map to
-     *  any single category (e.g. "Elective Surgery"). */
-    keys?: string[];
-    limit?: number;
-  } = {},
-): Promise<Service[]> {
-  const r = await get<{ results: Service[] }>("/services", {
+  opts: ServicesSearchOpts,
+): Promise<{ results: Service[]; search_token?: string }> {
+  return get<{ results: Service[]; search_token?: string }>("/services", {
     q: query, category: opts.category, limit: opts.limit ?? 30,
     categories: opts.categories?.join(","),
     keys: opts.keys?.join(","),
   });
+}
+
+export async function searchServices(query: string, opts: ServicesSearchOpts = {}): Promise<Service[]> {
+  const r = await _searchServicesRaw(query, opts);
   return r.results;
+}
+
+/** Same call as searchServices(), but also surfaces the one-time token the
+ *  server hands back on a genuine zero-result miss (see api/serving_api.py's
+ *  _issue_zero_result_token) — aiSearchServices() below needs it to prove a
+ *  real search just failed before the (costly, LLM-backed) fallback runs.
+ *  `searchToken` is null whenever there were real results, since there's
+ *  nothing to fall back from. */
+export async function searchServicesWithToken(
+  query: string,
+  opts: ServicesSearchOpts = {},
+): Promise<{ results: Service[]; searchToken: string | null }> {
+  const r = await _searchServicesRaw(query, opts);
+  return { results: r.results, searchToken: r.search_token ?? null };
 }
 
 /** Fallback for when searchServices() above already came back empty. Sends
@@ -468,8 +488,12 @@ export async function searchServices(
  *  with the same cards. `enabled: false` means no API key is configured on
  *  the server; `error` is set (results empty) if the AI call itself failed —
  *  both are normal, expected outcomes to show a plain message for, not
- *  something to throw on. */
-export async function aiSearchServices(description: string): Promise<{
+ *  something to throw on.
+ *
+ *  `searchToken` must be the token from the searchServicesWithToken() call
+ *  that just returned zero results — the server rejects the request
+ *  (403) without one, so this can't be called cold. */
+export async function aiSearchServices(description: string, searchToken: string): Promise<{
   results: Service[];
   enabled: boolean;
   error: string | null;
@@ -477,7 +501,7 @@ export async function aiSearchServices(description: string): Promise<{
   const res = await fetch(`${BASE}/services/ai-search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: description }),
+    body: JSON.stringify({ query: description, search_token: searchToken }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
