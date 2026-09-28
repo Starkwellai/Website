@@ -22,7 +22,7 @@ import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   searchServicesWithToken, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
   getCashPrices, getFacilityQuality, getFacilityReviews, submitFacilityReview,
-  getPublicListing,
+  getPublicListing, requestAppointment,
   formatPrice, isPreciseLocation, facilityLabel, googleMapsSearchUrl, isHSA,
   EVIDENCE_LABEL, SORT_LABEL,
   type Service, type Facility, type ProviderPrice, type Evidence,
@@ -402,6 +402,44 @@ export function PriceSearch() {
       .catch(() => { if (!cancelled) setListingClaims([]); });
     return () => { cancelled = true; };
   }, [facility]);
+
+  // Appointment-request form for a claimed listing — see
+  // requestAppointment() in src/lib/starkwell.ts.
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requestName, setRequestName] = useState("");
+  const [requestContact, setRequestContact] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestSent, setRequestSent] = useState(false);
+
+  useEffect(() => {
+    setShowRequestForm(false); setRequestSent(false); setRequestError(null);
+    setRequestName(""); setRequestContact(""); setRequestMessage("");
+  }, [facility]);
+
+  async function handleRequestAppointment() {
+    if (!facility?.facility_key || !requestName.trim() || !requestContact.trim()) return;
+    setRequestSubmitting(true);
+    setRequestError(null);
+    try {
+      await requestAppointment(facility.facility_key, {
+        patient_name: requestName.trim(),
+        contact: requestContact.trim(),
+        message: requestMessage.trim() || undefined,
+      });
+      setRequestSent(true);
+      setShowRequestForm(false);
+    } catch (e) {
+      setRequestError(
+        e instanceof Error && e.message.startsWith("429")
+          ? "Too many requests sent recently — please try again later."
+          : "Couldn't send that request — please try again."
+      );
+    } finally {
+      setRequestSubmitting(false);
+    }
+  }
 
   async function handleSubmitReview() {
     if (!facility?.facility_key || reviewRating < 1) return;
@@ -1029,6 +1067,62 @@ export function PriceSearch() {
                           {c.phone && <p className="text-sm text-gray-600 mt-1">{c.phone}</p>}
                         </div>
                       ))}
+
+                      <div className="pt-3 border-t border-teal-200">
+                        {requestSent ? (
+                          <p className="text-sm text-green-700 flex items-center gap-1.5">
+                            <ShieldCheck className="h-4 w-4" />
+                            Request sent — the practice will reach out to you directly.
+                          </p>
+                        ) : showRequestForm ? (
+                          <div className="space-y-2 max-w-sm">
+                            <Input
+                              placeholder="Your name"
+                              value={requestName}
+                              onChange={e => setRequestName(e.target.value)}
+                              maxLength={120}
+                            />
+                            <Input
+                              placeholder="Phone or email so they can reach you"
+                              value={requestContact}
+                              onChange={e => setRequestContact(e.target.value)}
+                              maxLength={200}
+                            />
+                            <Textarea
+                              placeholder="What you'd like to be seen for (optional)"
+                              value={requestMessage}
+                              onChange={e => setRequestMessage(e.target.value)}
+                              maxLength={1000}
+                              rows={2}
+                            />
+                            {requestError && <p className="text-sm text-red-700" role="alert">{requestError}</p>}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={handleRequestAppointment}
+                                disabled={requestSubmitting || !requestName.trim() || !requestContact.trim()}
+                                className="bg-teal-600 hover:bg-teal-700"
+                              >
+                                {requestSubmitting ? "Sending…" : "Send request"}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setShowRequestForm(false)}>
+                                Cancel
+                              </Button>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              This isn't a confirmed appointment — the practice will contact you to schedule.
+                            </p>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => setShowRequestForm(true)}
+                            className="bg-teal-600 hover:bg-teal-700"
+                          >
+                            Request an appointment
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 )}

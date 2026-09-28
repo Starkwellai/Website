@@ -2394,6 +2394,22 @@ def _provider_db() -> sqlite3.Connection:
     """)
     con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_facility ON claimed_listings(facility_key)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_provider ON claimed_listings(provider_id)")
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS appointment_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_id INTEGER NOT NULL,
+            facility_key TEXT NOT NULL,
+            facility_label TEXT NOT NULL,
+            address TEXT NOT NULL,
+            city TEXT NOT NULL,
+            patient_name TEXT NOT NULL,
+            contact TEXT NOT NULL,
+            message TEXT,
+            status TEXT NOT NULL DEFAULT 'new',
+            created_at TEXT NOT NULL
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_appt_provider ON appointment_requests(provider_id)")
     con.row_factory = sqlite3.Row
     return con
 
@@ -2717,6 +2733,100 @@ def public_listing(facility_key: str):
     finally:
         con.close()
     return {"facility_key": facility_key, "claims": [dict(r) for r in rows]}
+
+
+# ---- appointment requests ---------------------------------------------------
+# The follow-through on claimed listings: a patient who sees a claimed
+# practice's real name and description can now actually reach out. There's
+# no booking/scheduling backend (see the honest empty states in
+# ProviderDashboard.tsx) -- this is a lead landing in the provider's own
+# dashboard, not a real appointment being scheduled anywhere.
+
+class AppointmentRequestBody(BaseModel):
+    patient_name: str = Field(..., min_length=1, max_length=120)
+    contact: str = Field(..., min_length=3, max_length=200)
+    message: Optional[str] = Field(None, max_length=1000)
+
+
+# Same reasoning as _check_review_rate_limit above -- open, unauthenticated
+# endpoint, rate limit is the only real defense against spam at this scale.
+_appointment_rate_state: dict[str, list[float]] = {}
+
+
+def _check_appointment_rate_limit(ip: str) -> None:
+    now = time.time()
+    hits = [t for t in _appointment_rate_state.get(ip, []) if now - t < 3600.0]
+    if len(hits) >= 5:
+        raise HTTPException(429, "Too many requests sent recently — try again in a bit.")
+    hits.append(now)
+    _appointment_rate_state[ip] = hits
+
+
+@app.post("/api/facilities/{facility_key}/request-appointment")
+def request_appointment(facility_key: str, body: AppointmentRequestBody, request: Request):
+    """Public, no auth. Broadcasts to every provider who has claimed this
+    exact location (almost always exactly one) rather than making the
+    patient pick between duplicate claims."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_appointment_rate_limit(client_ip)
+    con = _provider_db()
+    try:
+        claims = con.execute(
+            "SELECT provider_id, facility_label, address, city FROM claimed_listings WHERE facility_key = ?",
+            (facility_key,),
+        ).fetchall()
+        if not claims:
+            raise HTTPException(404, "This location hasn't been claimed by a practice yet.")
+        now = datetime.now(timezone.utc).isoformat()
+        for c in claims:
+            con.execute(
+                "INSERT INTO appointment_requests (provider_id, facility_key, facility_label, address, city, "
+                "patient_name, contact, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)",
+                (c["provider_id"], facility_key, c["facility_label"], c["address"], c["city"],
+                 body.patient_name.strip(), body.contact.strip(),
+                 body.message.strip() if body.message else None, now),
+            )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.get("/api/provider/appointment-requests")
+def my_appointment_requests(request: Request):
+    provider = _require_provider(request)
+    con = _provider_db()
+    try:
+        rows = con.execute(
+            "SELECT id, facility_key, facility_label, address, city, patient_name, contact, message, "
+            "status, created_at FROM appointment_requests WHERE provider_id = ? ORDER BY created_at DESC",
+            (provider["id"],),
+        ).fetchall()
+    finally:
+        con.close()
+    return {"requests": [dict(r) for r in rows]}
+
+
+class UpdateAppointmentStatusBody(BaseModel):
+    status: str = Field(..., pattern="^(new|contacted)$")
+
+
+@app.put("/api/provider/appointment-requests/{request_id}")
+def update_appointment_status(request_id: int, body: UpdateAppointmentStatusBody, request: Request):
+    provider = _require_provider(request)
+    con = _provider_db()
+    try:
+        row = con.execute(
+            "SELECT id FROM appointment_requests WHERE id = ? AND provider_id = ?",
+            (request_id, provider["id"]),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Request not found.")
+        con.execute("UPDATE appointment_requests SET status = ? WHERE id = ?", (body.status, request_id))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
 
 
 @app.get("/api/services/{service_key}/cash")

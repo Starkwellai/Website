@@ -26,6 +26,7 @@ import {
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { PHIIndicator } from "../components/PHIIndicator";
 import { ProviderListingsCard } from "../components/ProviderListingsCard";
+import { AppointmentRequestsCard } from "../components/AppointmentRequestsCard";
 import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount } from "../../lib/starkwell";
 
 /**
@@ -208,6 +209,8 @@ export function ProviderDashboard() {
           <div className="lg:col-span-2 space-y-6">
             <ProviderListingsCard />
 
+            <AppointmentRequestsCard />
+
             <Card className="border-blue-200">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -273,20 +276,6 @@ export function ProviderDashboard() {
                 <p className="text-xs text-gray-500 mt-2">
                   Search is disabled — no patient-record backend is connected.
                 </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="size-5 text-purple-600" />
-                  Messages
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-6 text-sm text-gray-600">
-                  No messages yet.
-                </div>
               </CardContent>
             </Card>
           </div>

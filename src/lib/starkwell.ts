@@ -798,3 +798,50 @@ export async function getPublicListing(facilityKey: string): Promise<PublicListi
   );
   return r.claims;
 }
+
+export interface AppointmentRequestInput {
+  patient_name: string;
+  contact: string;
+  message?: string;
+}
+
+/** Public, no auth — only works for a facility a provider has actually
+ *  claimed (see request_appointment in api/serving_api.py); the caller
+ *  should only show this action when getPublicListing() returned a claim. */
+export async function requestAppointment(facilityKey: string, input: AppointmentRequestInput): Promise<void> {
+  const res = await fetch(`${BASE}/facilities/${encodeURIComponent(facilityKey)}/request-appointment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export interface AppointmentRequest {
+  id: number;
+  facility_key: string;
+  facility_label: string;
+  address: string;
+  city: string;
+  patient_name: string;
+  contact: string;
+  message: string | null;
+  status: "new" | "contacted";
+  created_at: string;
+}
+
+export async function getAppointmentRequests(): Promise<AppointmentRequest[]> {
+  const res = await fetch(`${BASE}/provider/appointment-requests`, { headers: _authHeaders() });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  const r: { requests: AppointmentRequest[] } = await res.json();
+  return r.requests;
+}
+
+export async function setAppointmentRequestStatus(id: number, status: "new" | "contacted"): Promise<void> {
+  const res = await fetch(`${BASE}/provider/appointment-requests/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
