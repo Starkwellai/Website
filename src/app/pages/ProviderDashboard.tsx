@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { PHIIndicator } from "../components/PHIIndicator";
+import { ProviderListingsCard } from "../components/ProviderListingsCard";
 import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount } from "../../lib/starkwell";
 
 /**
@@ -205,6 +206,8 @@ export function ProviderDashboard() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
+            <ProviderListingsCard />
+
             <Card className="border-blue-200">
               <CardHeader>
                 <div className="flex items-start justify-between">

@@ -710,3 +710,91 @@ export async function logoutProviderAccount(): Promise<void> {
     // Best-effort server-side session cleanup — the client-side token is already cleared either way.
   });
 }
+
+function _authHeaders(): Record<string, string> {
+  const token = getProviderAuthToken();
+  if (!token) throw new Error("Not signed in.");
+  return { Authorization: `Bearer ${token}` };
+}
+
+export interface FacilityMatch {
+  address: string;
+  city: string;
+  facility_key: string;
+}
+
+/** Address search over real pricing data, signed-in providers only — see
+ *  api/serving_api.py's provider_facility_search for why this searches
+ *  address text rather than a business name (facility_key is derived from
+ *  address+city, and almost no real location has a name on file). */
+export async function searchMyFacility(query: string): Promise<FacilityMatch[]> {
+  const res = await fetch(`${BASE}/provider/facility-search?q=${encodeURIComponent(query)}`, {
+    headers: _authHeaders(),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  const r: { results: FacilityMatch[] } = await res.json();
+  return r.results;
+}
+
+export async function claimListing(facility: FacilityMatch, facilityLabel: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/listings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({
+      facility_key: facility.facility_key,
+      facility_label: facilityLabel,
+      address: facility.address,
+      city: facility.city,
+    }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export interface ClaimedListing {
+  facility_key: string;
+  facility_label: string;
+  address: string;
+  city: string;
+  description: string | null;
+  claimed_at: string;
+}
+
+export async function getMyListings(): Promise<ClaimedListing[]> {
+  const res = await fetch(`${BASE}/provider/listings`, { headers: _authHeaders() });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  const r: { listings: ClaimedListing[] } = await res.json();
+  return r.listings;
+}
+
+export async function updateListingDescription(facilityKey: string, description: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/listings/${encodeURIComponent(facilityKey)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({ description }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export async function unclaimListing(facilityKey: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/listings/${encodeURIComponent(facilityKey)}`, {
+    method: "DELETE",
+    headers: _authHeaders(),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export interface PublicListingClaim {
+  facility_label: string;
+  description: string | null;
+  practice_name: string;
+  phone: string | null;
+}
+
+/** Public, no auth — what a patient's facility card reads to show a claimed
+ *  description alongside the real pricing data. */
+export async function getPublicListing(facilityKey: string): Promise<PublicListingClaim[]> {
+  const r = await get<{ claims: PublicListingClaim[] }>(
+    `/facilities/${encodeURIComponent(facilityKey)}/listing`
+  );
+  return r.claims;
+}

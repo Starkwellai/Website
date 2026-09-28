@@ -2380,6 +2380,20 @@ def _provider_db() -> sqlite3.Connection:
             expires_at TEXT NOT NULL
         )
     """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS claimed_listings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_id INTEGER NOT NULL,
+            facility_key TEXT NOT NULL,
+            facility_label TEXT NOT NULL,
+            address TEXT NOT NULL,
+            city TEXT NOT NULL,
+            description TEXT,
+            claimed_at TEXT NOT NULL
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_facility ON claimed_listings(facility_key)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_provider ON claimed_listings(provider_id)")
     con.row_factory = sqlite3.Row
     return con
 
@@ -2556,6 +2570,153 @@ def provider_logout(request: Request):
         finally:
             con.close()
     return {"ok": True}
+
+
+# ---- claimed listings -------------------------------------------------------
+# Every real location is already free and searchable -- this is what lets a
+# signed-in provider take ownership of theirs: add a real description in
+# their own words, so a patient who found them on price sees more than a
+# bare address. facility_key is derived purely from (address, city) -- see
+# _facility_key above -- so finding "your own listing" means finding your
+# own real address in the pricing data, not searching by name: only 0.9% of
+# locations have a CMS-verified name at all (see facility_rows()'s
+# docstring), so a name search would fail for almost every small clinic,
+# exactly the providers this is for. The provider supplies their own real
+# practice name at claim time instead.
+#
+# No verification yet -- same honest gap as NPI checking on signup. Nothing
+# here claims a listing is confirmed to belong to who claims it.
+
+@app.get("/api/provider/facility-search")
+def provider_facility_search(request: Request,
+                              q_: str = Query(..., alias="q", min_length=3, max_length=200)):
+    """Signed-in providers only -- this walks real patient pricing data, not
+    something to leave open to anonymous scraping."""
+    _require_provider(request)
+    term = f"%{q_.lower().strip()}%"
+    rows = q("""
+        SELECT upper(trim(address)) AS address, upper(trim(city)) AS city
+        FROM prices
+        WHERE address IS NOT NULL AND trim(address) <> ''
+          AND lower(address || ' ' || city) LIKE ?
+        GROUP BY 1, 2
+        ORDER BY 1
+        LIMIT 15
+    """, [term])
+    for r in rows:
+        r["facility_key"] = _facility_key(r["address"], r["city"])
+    return {"results": rows}
+
+
+class ClaimListingBody(BaseModel):
+    facility_key: str = Field(..., min_length=1, max_length=32)
+    facility_label: str = Field(..., min_length=1, max_length=200)
+    address: str = Field(..., min_length=1, max_length=300)
+    city: str = Field(..., min_length=1, max_length=120)
+
+
+@app.post("/api/provider/listings")
+def claim_listing(body: ClaimListingBody, request: Request):
+    provider = _require_provider(request)
+    # Re-derive the key server-side rather than trust the client's copy --
+    # the address/city the client is claiming must actually hash to the
+    # facility_key it's claiming, or a crafted request could attach a
+    # listing's description to a different location than the one shown.
+    if _facility_key(body.address, body.city) != body.facility_key:
+        raise HTTPException(400, "That address doesn't match the listing being claimed.")
+    con = _provider_db()
+    try:
+        existing = con.execute(
+            "SELECT id FROM claimed_listings WHERE provider_id = ? AND facility_key = ?",
+            (provider["id"], body.facility_key),
+        ).fetchone()
+        if existing:
+            raise HTTPException(409, "You've already claimed this listing.")
+        con.execute(
+            "INSERT INTO claimed_listings (provider_id, facility_key, facility_label, address, city, "
+            "description, claimed_at) VALUES (?, ?, ?, ?, ?, NULL, ?)",
+            (provider["id"], body.facility_key, body.facility_label.strip(),
+             body.address.strip(), body.city.strip(), datetime.now(timezone.utc).isoformat()),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.get("/api/provider/listings")
+def my_listings(request: Request):
+    provider = _require_provider(request)
+    con = _provider_db()
+    try:
+        rows = con.execute(
+            "SELECT facility_key, facility_label, address, city, description, claimed_at "
+            "FROM claimed_listings WHERE provider_id = ? ORDER BY claimed_at DESC",
+            (provider["id"],),
+        ).fetchall()
+    finally:
+        con.close()
+    return {"listings": [dict(r) for r in rows]}
+
+
+class UpdateListingBody(BaseModel):
+    description: str = Field(..., max_length=1000)
+
+
+@app.put("/api/provider/listings/{facility_key}")
+def update_listing(facility_key: str, body: UpdateListingBody, request: Request):
+    provider = _require_provider(request)
+    con = _provider_db()
+    try:
+        row = con.execute(
+            "SELECT id FROM claimed_listings WHERE provider_id = ? AND facility_key = ?",
+            (provider["id"], facility_key),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "You haven't claimed this listing.")
+        con.execute(
+            "UPDATE claimed_listings SET description = ? WHERE id = ?",
+            (body.description.strip() or None, row["id"]),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.delete("/api/provider/listings/{facility_key}")
+def unclaim_listing(facility_key: str, request: Request):
+    provider = _require_provider(request)
+    con = _provider_db()
+    try:
+        con.execute(
+            "DELETE FROM claimed_listings WHERE provider_id = ? AND facility_key = ?",
+            (provider["id"], facility_key),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.get("/api/facilities/{facility_key}/listing")
+def public_listing(facility_key: str):
+    """Public, no auth -- this is what a patient's facility page reads to
+    show a claimed description, same pattern as get_reviews() below: a
+    separate call the frontend merges with the pricing data, not a SQL join,
+    because this lives in the provider-accounts SQLite file and the pricing
+    data lives in a completely separate DuckDB connection."""
+    con = _provider_db()
+    try:
+        rows = con.execute(
+            "SELECT cl.facility_label, cl.description, cl.claimed_at, pa.practice_name, pa.phone "
+            "FROM claimed_listings cl JOIN provider_accounts pa ON pa.id = cl.provider_id "
+            "WHERE cl.facility_key = ? ORDER BY cl.claimed_at ASC",
+            (facility_key,),
+        ).fetchall()
+    finally:
+        con.close()
+    return {"facility_key": facility_key, "claims": [dict(r) for r in rows]}
 
 
 @app.get("/api/services/{service_key}/cash")
