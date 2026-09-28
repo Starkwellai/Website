@@ -22,11 +22,12 @@ import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   searchServicesWithToken, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
   getCashPrices, getFacilityQuality, getFacilityReviews, submitFacilityReview,
+  getPublicListing,
   formatPrice, isPreciseLocation, facilityLabel, googleMapsSearchUrl, isHSA,
   EVIDENCE_LABEL, SORT_LABEL,
   type Service, type Facility, type ProviderPrice, type Evidence,
   type Category, type ProviderSort, type Plan, type CashPrice, type QualityMeasure,
-  type FacilityReviews,
+  type FacilityReviews, type PublicListingClaim,
 } from "../../lib/starkwell";
 import {
   getSavedServices, getSavedFacilities, toggleSavedService, toggleSavedFacility,
@@ -386,6 +387,20 @@ export function PriceSearch() {
     setReviewRating(0); setReviewComment(""); setReviewName("");
     if (!facility?.facility_key) { setReviews(null); return; }
     loadReviews(facility.facility_key);
+  }, [facility]);
+
+  // A provider who claimed this location — see ProviderListingsCard.tsx and
+  // /api/facilities/{facility_key}/listing. Public, no auth; most facilities
+  // will have none, since claiming is opt-in.
+  const [listingClaims, setListingClaims] = useState<PublicListingClaim[]>([]);
+
+  useEffect(() => {
+    if (!facility?.facility_key) { setListingClaims([]); return; }
+    let cancelled = false;
+    getPublicListing(facility.facility_key)
+      .then(claims => { if (!cancelled) setListingClaims(claims); })
+      .catch(() => { if (!cancelled) setListingClaims([]); });
+    return () => { cancelled = true; };
   }, [facility]);
 
   async function handleSubmitReview() {
@@ -995,6 +1010,27 @@ export function PriceSearch() {
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+
+                {facility && listingClaims.length > 0 && (
+                  <Card className="mb-4 border-teal-200 bg-teal-50/40">
+                    <CardContent className="p-4 space-y-3">
+                      {listingClaims.map((c, i) => (
+                        <div key={i} className={i > 0 ? "pt-3 border-t border-teal-200" : ""}>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <h3 className="font-medium text-gray-900">{c.practice_name}</h3>
+                            <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
+                              Claimed by this practice
+                            </Badge>
+                          </div>
+                          {c.description && (
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.description}</p>
+                          )}
+                          {c.phone && <p className="text-sm text-gray-600 mt-1">{c.phone}</p>}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
                 )}
 
                 {facility && (
