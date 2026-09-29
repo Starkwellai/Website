@@ -10,7 +10,25 @@ export function HipaaContent() {
           This Notice describes how medical information about you may be used and disclosed and how you can get access to this information. Please review it carefully.
         </p>
         <p>
-          Starkwell is committed to protecting your health information in compliance with the Health Insurance Portability and Accountability Act (HIPAA) and other applicable privacy laws.
+          Starkwell is committed to protecting your health information and to building toward full
+          compliance with the Health Insurance Portability and Accountability Act (HIPAA).
+        </p>
+      </section>
+
+      <section className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+        <h2 className="text-lg font-semibold text-amber-900 mb-2">Where things actually stand today</h2>
+        <p className="mb-2 text-sm">
+          Starkwell doesn't yet store diagnoses, treatment history, or insurance claims — today
+          this is a public price-comparison tool, plus an appointment-request inbox that shares
+          only the name, contact info, and optional note a patient chooses to send a practice.
+          We never sell your data and never share it without consent.
+        </p>
+        <p className="text-sm">
+          Full HIPAA-level infrastructure — encryption at rest, signed agreements with every
+          vendor, audit logging, a named security officer, a completed risk assessment — is real
+          work we're building toward, not something already in place. The rest of this Notice
+          describes that target state; nothing here should be read as a claim that every safeguard
+          described below is live today.
         </p>
       </section>
 
@@ -35,7 +53,7 @@ export function HipaaContent() {
           We may use and disclose your health information to facilitate medical treatment or services by healthcare providers. This includes coordination of care and consultations between providers regarding your treatment.
         </p>
         <p className="mb-3">
-          <strong>Example:</strong> When you book an appointment through Starkwell, we share relevant health information with the provider to ensure they can deliver appropriate care.
+          <strong>Example:</strong> When you request an appointment through a claimed listing, we send the practice the name, contact info, and any note you chose to include — not a medical record, since Starkwell doesn't hold one.
         </p>
 
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.2 For Payment</h3>
@@ -63,7 +81,7 @@ export function HipaaContent() {
           We may disclose your health information to our business associates who perform functions on our behalf or provide services to us. We require these business associates to appropriately safeguard your health information through written agreements.
         </p>
         <p className="mb-3">
-          <strong>Example:</strong> We use AI service providers to translate medical information into plain language. These providers are bound by HIPAA requirements.
+          <strong>Example:</strong> AI-assisted search isn't live yet. When it launches, any AI vendor we use for it will need a signed business-associate agreement in place first — not something we're claiming exists today.
         </p>
 
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.5 As Required by Law</h3>
@@ -139,10 +157,9 @@ export function HipaaContent() {
           <p>Starkwell Privacy Officer</p>
           <p>Email: privacy@starkwell.com</p>
           <p>Address: Salt Lake City, Utah</p>
-          <p>Phone: (555) 123-4567</p>
         </div>
         <p>
-          We will respond to your request within 30 days. If we need additional time, we will notify you of the reason for the delay and when you can expect a response.
+          We're a small team without a case-management system yet, but a real person reads every message and we'll respond as quickly as we can.
         </p>
       </section>
 
@@ -198,38 +215,36 @@ export function HipaaContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">9. Security Measures</h2>
         <p className="mb-3">
-          To protect your health information, we implement the following security measures:
+          Here's what's actually true today, and what's still ahead:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Administrative safeguards: Security policies, workforce training, and access controls</li>
-          <li>Physical safeguards: Facility access controls and workstation security</li>
-          <li>Technical safeguards: Encryption, authentication, and audit controls</li>
-          <li>Regular risk assessments and security audits</li>
-          <li>Incident response and breach notification procedures</li>
+          <li>Providers can only see their own claimed listings and the appointment requests sent to them</li>
+          <li>We never sell your data, and never share it without consent</li>
+          <li><em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest, formal workforce training, regular third-party security audits, and a written incident-response/breach-notification procedure</li>
         </ul>
+        <p>
+          We're building toward all of the above rather than claiming it's finished.
+        </p>
       </section>
 
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">10. Electronic Health Records</h2>
         <p className="mb-3">
-          Starkwell uses electronic health record systems to store and manage your health information. These systems are designed with multiple layers of security and are regularly updated to meet current HIPAA standards.
-        </p>
-        <p>
-          Access to your electronic health information is restricted to authorized personnel who need it to perform their job duties.
+          Starkwell does not operate an electronic health record system. We don't store diagnoses,
+          treatment history, or clinical notes — today this is a price-comparison directory, plus
+          an appointment-request inbox that passes along only what a patient chooses to send.
         </p>
       </section>
 
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">11. AI and Machine Learning</h2>
         <p className="mb-3">
-          Starkwell uses AI-powered tools to translate medical information into plain language and provide personalized healthcare recommendations. These AI systems:
+          Starkwell plans to use AI to help match a plain-language description of a symptom or
+          need to the right real, priced service in our catalog. This feature isn't live yet. When
+          it launches, it will be built so the AI can only return real catalog entries — never
+          invent one — and any vendor used for it will need a signed business-associate agreement
+          in place first.
         </p>
-        <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Process your health information in a secure, HIPAA-compliant environment</li>
-          <li>Use de-identified data for training and improvement purposes when possible</li>
-          <li>Are regularly audited for privacy and security compliance</li>
-          <li>Do not share your identifiable health information with third parties without authorization</li>
-        </ul>
       </section>
 
       <section>
@@ -250,9 +265,7 @@ export function HipaaContent() {
         <div className="pl-4">
           <p><strong>Starkwell Privacy Officer</strong></p>
           <p>Email: privacy@starkwell.com</p>
-          <p>Phone: (555) 123-4567</p>
           <p>Address: Salt Lake City, Utah</p>
-          <p>Website: www.starkwell.com/privacy</p>
         </div>
       </section>
 

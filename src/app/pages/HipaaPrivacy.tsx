@@ -58,7 +58,7 @@ export function HipaaPrivacy() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">Our Commitment to Your Privacy</h2>
                     <p className="mb-3">
-                      HealthCare Portal is committed to protecting the privacy of your Protected Health Information (PHI). This notice describes our privacy practices and your rights regarding your health information. We are required by law to:
+                      Starkwell is committed to protecting the privacy of your Protected Health Information (PHI). This notice describes our privacy practices and your rights regarding your health information. We are required by law to:
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mb-3">
                       <li>Maintain the privacy and security of your PHI</li>
@@ -200,46 +200,32 @@ export function HipaaPrivacy() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">Security Safeguards</h2>
                     <p className="mb-3">
-                      We implement appropriate technical, physical, and administrative safeguards to protect your PHI:
+                      Starkwell is a small, early-stage product. Here's what's actually true today,
+                      not a claim that every HIPAA safeguard is already built:
                     </p>
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-2">Technical Safeguards</h4>
+                        <h4 className="font-semibold text-blue-800 mb-2">In place today</h4>
                         <ul className="text-sm space-y-1">
-                          <li>• Encryption of data in transit and at rest</li>
-                          <li>• Access controls and authentication</li>
+                          <li>• Providers only see their own claimed listings and requests</li>
+                          <li>• We never sell your data, and never share it without consent</li>
+                          <li>• Passwordless accounts — no password to leak, by design</li>
+                        </ul>
+                      </div>
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <h4 className="font-semibold text-blue-800 mb-2">Not yet in place</h4>
+                        <ul className="text-sm space-y-1">
+                          <li>• Encryption in transit (HTTPS) and at rest</li>
                           <li>• Audit trails and monitoring</li>
-                          <li>• Automatic logoff features</li>
-                        </ul>
-                      </div>
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-2">Physical Safeguards</h4>
-                        <ul className="text-sm space-y-1">
-                          <li>• Secure facility access controls</li>
-                          <li>• Workstation security</li>
-                          <li>• Device and media controls</li>
-                          <li>• Secure disposal procedures</li>
-                        </ul>
-                      </div>
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-2">Administrative Safeguards</h4>
-                        <ul className="text-sm space-y-1">
-                          <li>• Security management processes</li>
-                          <li>• Workforce training and management</li>
-                          <li>• Security incident procedures</li>
-                          <li>• Business associate agreements</li>
-                        </ul>
-                      </div>
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-2">Organizational Requirements</h4>
-                        <ul className="text-sm space-y-1">
-                          <li>• Regular risk assessments</li>
-                          <li>• Privacy and security policies</li>
-                          <li>• Contingency planning</li>
-                          <li>• Evaluation procedures</li>
+                          <li>• Formal workforce training program</li>
+                          <li>• Business associate agreements (none needed yet — no vendor handles PHI on our behalf today)</li>
+                          <li>• A completed risk assessment and written incident-response plan</li>
                         </ul>
                       </div>
                     </div>
+                    <p className="text-sm mt-3 text-gray-600">
+                      We're building toward the safeguards above rather than claiming they're finished.
+                    </p>
                   </section>
 
                   <section>
@@ -268,10 +254,9 @@ export function HipaaPrivacy() {
                       For questions about this notice or to exercise your rights:
                     </p>
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <p className="font-medium">Privacy Officer - HealthCare Portal</p>
-                      <p className="mt-2">Email: privacy@healthcareportal.com</p>
-                      <p>Phone: 1-800-PRIVACY-1 (1-800-774-8229)</p>
-                      <p>Address: 123 Medical Center Drive, Suite 100</p>
+                      <p className="font-medium">Privacy Officer - Starkwell</p>
+                      <p className="mt-2">Email: privacy@starkwell.com</p>
+                      <p>Address: Salt Lake City, Utah</p>
                       <p className="mt-3 text-sm">
                         Office of Civil Rights (OCR)<br />
                         U.S. Department of Health and Human Services<br />

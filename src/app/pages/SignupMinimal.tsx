@@ -199,9 +199,8 @@ export function SignupMinimal() {
 
           <div className="mt-12 pt-8 border-t border-gray-100">
             <div className="flex items-center justify-center gap-8 text-sm text-gray-500">
-              <span>🔒 HIPAA Compliant</span>
-              <span>🔐 Encrypted</span>
-              <span>✓ Secure</span>
+              <span>✓ Free to search</span>
+              <span>✓ No data sold, ever</span>
             </div>
           </div>
         </div>

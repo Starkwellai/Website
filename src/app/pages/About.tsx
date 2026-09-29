@@ -157,7 +157,7 @@ export function About() {
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Check className="size-4 text-white" />
                     </div>
-                    <span className="text-gray-700">HIPAA-secure and always in your corner</span>
+                    <span className="text-gray-700">We never sell your data, and always in your corner</span>
                   </li>
                 </ul>
               </div>

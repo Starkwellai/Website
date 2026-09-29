@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Shield, Lock, CheckCircle, BadgeCheck, ListFilter, ClipboardList, Mail } from "lucide-react";
+import { Lock, CheckCircle, BadgeCheck, ListFilter, ClipboardList, Mail } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
@@ -36,46 +36,54 @@ export function Trust() {
               Starkwell is built on a foundation of transparency, security, and accountability — for patients and providers alike.
             </p>
 
-            {/* Trust Badges */}
+            {/* Trust Badges — each one matches a real, checkable fact below,
+                not an infrastructure claim we can't back up yet. */}
             <div className="grid md:grid-cols-3 gap-8 max-w-3xl mx-auto">
               <div className="flex flex-col items-center">
                 <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center mb-4">
-                  <Shield className="size-10 text-white" />
+                  <BadgeCheck className="size-10 text-white" />
                 </div>
-                <h3 className="font-semibold text-lg">HIPAA Compliant</h3>
+                <h3 className="font-semibold text-lg">Federal NPI Check</h3>
               </div>
 
               <div className="flex flex-col items-center">
                 <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center mb-4">
                   <Lock className="size-10 text-white" />
                 </div>
-                <h3 className="font-semibold text-lg">256-bit Encryption</h3>
+                <h3 className="font-semibold text-lg">No Data Sold, Ever</h3>
               </div>
 
               <div className="flex flex-col items-center">
                 <div className="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center mb-4">
                   <CheckCircle className="size-10 text-white" />
                 </div>
-                <h3 className="font-semibold text-lg">Verified Providers</h3>
+                <h3 className="font-semibold text-lg">Real Published Prices</h3>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* HIPAA Compliance Section */}
+      {/* Data & Privacy Section */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-6">
           <div className="max-w-6xl mx-auto">
             <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">
-              HIPAA Compliant by design
+              What's actually true about your data today
             </h2>
 
             <div className="grid md:grid-cols-2 gap-12 items-start">
               {/* Left Column - Explanation */}
               <div>
                 <p className="text-lg text-gray-700 leading-relaxed">
-                  All patient data on Starkwell is handled in full compliance with the Health Insurance Portability and Accountability Act (HIPAA). We never sell your data, never share it without consent, and store it using enterprise-grade encryption.
+                  Starkwell doesn't store diagnoses, treatment history, or insurance claims —
+                  today this is a public price-comparison tool, not a medical record system. We
+                  never sell your data and never share it without consent. Full HIPAA-level
+                  infrastructure — encryption at rest, signed agreements with every vendor, audit
+                  logging, a named security officer — is real work we're building toward, not
+                  something we're claiming is finished. See our{" "}
+                  <a href="/hipaa-privacy" className="text-blue-600 hover:underline">HIPAA Notice</a>{" "}
+                  for exactly what's in place today.
                 </p>
               </div>
 
@@ -83,23 +91,23 @@ export function Trust() {
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">End-to-end encryption for all health data</span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
                   <span className="text-gray-700">No data sold to third parties — ever</span>
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">Role-based access controls</span>
+                  <span className="text-gray-700">Providers only see their own claimed listings and requests</span>
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">Regular third-party security audits</span>
+                  <span className="text-gray-700">Every provider checked against the federal NPI registry</span>
                 </div>
                 <div className="flex items-start gap-3">
-                  <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">Data deletion available on request</span>
+                  <BadgeCheck className="size-6 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-gray-500">HTTPS encryption in transit — coming soon, not live yet</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <BadgeCheck className="size-6 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-gray-500">Full HIPAA compliance program — planned, not in place yet</span>
                 </div>
               </div>
             </div>

@@ -68,10 +68,6 @@ export function AccessDenied({
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-600 mt-0.5">•</span>
-                <span>This access attempt has been logged for security and compliance purposes</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 mt-0.5">•</span>
                 <span>Unauthorized attempts to access PHI may result in disciplinary action</span>
               </li>
             </ul>
@@ -81,11 +77,11 @@ export function AccessDenied({
             <div className="flex items-start gap-3">
               <FileText className="size-5 text-orange-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="font-semibold text-orange-900 mb-1">Access Attempt Logged</h4>
+                <h4 className="font-semibold text-orange-900 mb-1">No Audit Log Yet</h4>
                 <p className="text-sm text-orange-800">
-                  This access attempt has been recorded in the audit trail with your user ID,
-                  timestamp, IP address, and requested resource. All access logs are reviewed
-                  regularly for HIPAA compliance.
+                  Once a real audit-logging backend exists, access attempts like this one will be
+                  recorded here — see the Activity Log page. No logging backend is wired up yet,
+                  so nothing is actually being recorded right now.
                 </p>
               </div>
             </div>

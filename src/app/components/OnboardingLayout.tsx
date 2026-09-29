@@ -79,7 +79,7 @@ export function OnboardingLayout({ children, currentStep, totalSteps, onBack }: 
         <div className="container mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-center text-sm text-gray-500">
-              Â© 2026 Starkwell. Your information is secure and HIPAA compliant.
+              © 2026 Starkwell. We never sell your information.
             </p>
             <div className="flex gap-4 text-sm">
               <a href="/privacy" className="text-blue-600 hover:underline">Privacy</a>

@@ -54,7 +54,7 @@ export function TermsContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">5. Healthcare Information Disclaimer</h2>
         <p className="mb-3">
-          The Service provides information and tools to help you navigate healthcare options, but it does not provide medical advice. The AI-powered features are designed to translate and explain medical information in plain language, but they should not be used as a substitute for professional medical advice, diagnosis, or treatment.
+          The Service provides information and tools to help you navigate healthcare options, but it does not provide medical advice. Any AI-powered search features, live or planned, are designed to help match your description to real, priced services in our catalog — not to give medical advice, diagnosis, or treatment, and should never be used as a substitute for a qualified provider.
         </p>
         <p className="mb-3">
           Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of information you have read on the Service.
@@ -70,7 +70,7 @@ export function TermsContent() {
           Your use of the Service is also governed by our Privacy Policy and HIPAA Privacy Notice. By using the Service, you consent to the collection, use, and sharing of your information as described in those documents.
         </p>
         <p>
-          We implement appropriate technical and organizational measures to protect your personal health information in compliance with HIPAA and other applicable privacy laws.
+          We're building toward full compliance with HIPAA and other applicable privacy laws — see our HIPAA Privacy Notice for exactly what protections are in place today versus still ahead.
         </p>
       </section>
 

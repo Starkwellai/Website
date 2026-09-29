@@ -176,7 +176,7 @@ export function Home() {
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600 mb-8">
               <div className="flex items-center gap-2">
                 <CheckCircle className="size-5 text-blue-600" />
-                <span>Verified Providers</span>
+                <span>Federal NPI Check</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="size-5 text-blue-600" />
@@ -184,7 +184,7 @@ export function Home() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="size-5 text-blue-600" />
-                <span>HIPAA Secure</span>
+                <span>No Data Sold, Ever</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="size-5 text-blue-600" />
@@ -628,8 +628,8 @@ export function Home() {
               <div className="flex justify-center mb-4">
                 <Award className="size-12 text-blue-600" />
               </div>
-              <h3 className="text-4xl font-bold text-gray-900 mb-2">100%</h3>
-              <p className="text-gray-600">HIPAA compliant & secure</p>
+              <h3 className="text-4xl font-bold text-gray-900 mb-2">Real</h3>
+              <p className="text-gray-600">Prices from insurers' own published files, not estimates</p>
             </div>
           </div>
         </div>

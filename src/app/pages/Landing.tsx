@@ -115,7 +115,7 @@ export function Landing() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-blue-600 mt-0.5">✓</span>
-                    <span>HIPAA compliant and fully encrypted</span>
+                    <span>We never sell your data, ever</span>
                   </li>
                 </ul>
               </div>
@@ -204,7 +204,7 @@ export function Landing() {
               <div className="space-y-3 text-sm text-gray-600">
                 <div className="flex items-start gap-2">
                   <CheckCircle className="size-4 text-blue-600 mt-0.5" />
-                  <span>Your data is encrypted end-to-end</span>
+                  <span>We never sell your information</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCircle className="size-4 text-blue-600 mt-0.5" />
@@ -212,7 +212,7 @@ export function Landing() {
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCircle className="size-4 text-blue-600 mt-0.5" />
-                  <span>100% HIPAA compliant platform</span>
+                  <span>Built toward full HIPAA compliance — see our HIPAA Notice for what's true today</span>
                 </div>
               </div>
             </div>
@@ -356,7 +356,7 @@ export function Landing() {
                   </div>
 
                   <p className="text-xs text-center text-gray-500">
-                    Your information is encrypted and HIPAA compliant
+                    We never sell your information — see our Privacy Policy
                   </p>
                 </form>
               )}

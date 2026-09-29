@@ -105,17 +105,18 @@ export function PrivacyContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">5. Data Security</h2>
         <p className="mb-3">
-          We implement appropriate technical and organizational security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. These measures include:
+          Here's what's actually true today, not an aspirational list:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Encryption of data in transit and at rest using industry-standard protocols</li>
-          <li>Regular security assessments and penetration testing</li>
-          <li>Access controls and authentication mechanisms</li>
-          <li>Employee training on data security and privacy</li>
-          <li>HIPAA-compliant infrastructure and practices</li>
+          <li>Provider accounts can only see their own claimed listings and the requests sent to them</li>
+          <li>We never sell your data, and never share it without consent</li>
         </ul>
-        <p>
-          However, no method of transmission over the Internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your personal information, we cannot guarantee its absolute security.
+        <p className="mb-3">
+          <em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest, regular
+          third-party security audits, and formal HIPAA-compliant infrastructure — these are real
+          work we're building toward, not something already true. However, no method of
+          transmission over the Internet or electronic storage is ever 100% secure, even once
+          those safeguards are added — we cannot guarantee absolute security.
         </p>
       </section>
 

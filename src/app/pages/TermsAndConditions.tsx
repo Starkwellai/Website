@@ -41,17 +41,17 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">1. Acceptance of Terms</h2>
                     <p className="mb-3">
-                      By accessing and using HealthCare Portal ("the Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+                      By accessing and using Starkwell ("the Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
                     </p>
                     <p>
-                      These Terms and Conditions constitute a legally binding agreement between you and HealthCare Portal regarding your use of the Service.
+                      These Terms and Conditions constitute a legally binding agreement between you and Starkwell regarding your use of the Service.
                     </p>
                   </section>
 
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">2. Use License</h2>
                     <p className="mb-3">
-                      Permission is granted to access and use HealthCare Portal for personal, non-commercial healthcare management purposes. This license shall automatically terminate if you violate any of these restrictions.
+                      Permission is granted to access and use Starkwell for personal, non-commercial healthcare management purposes. This license shall automatically terminate if you violate any of these restrictions.
                     </p>
                     <p className="font-medium mb-2">You may not:</p>
                     <ul className="list-disc pl-6 space-y-1">
@@ -82,13 +82,13 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">4. Healthcare Information Disclaimer</h2>
                     <p className="mb-3">
-                      HealthCare Portal is a tool for managing and organizing your healthcare information. It is not a substitute for professional medical advice, diagnosis, or treatment.
+                      Starkwell is a tool for managing and organizing your healthcare information. It is not a substitute for professional medical advice, diagnosis, or treatment.
                     </p>
                     <p className="mb-3 font-medium text-blue-900">
                       Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of something you have read on this Service.
                     </p>
                     <p>
-                      In case of a medical emergency, call your doctor or 911 immediately. HealthCare Portal does not recommend or endorse any specific tests, physicians, products, procedures, opinions, or other information.
+                      In case of a medical emergency, call your doctor or 911 immediately. Starkwell does not recommend or endorse any specific tests, physicians, products, procedures, opinions, or other information.
                     </p>
                   </section>
 
@@ -98,24 +98,25 @@ export function TermsAndConditions() {
                       We understand the sensitive nature of your health information. By using this Service, you authorize us to collect, use, and disclose your Protected Health Information as described in our HIPAA Privacy Notice.
                     </p>
                     <p>
-                      We implement appropriate technical, administrative, and physical safeguards to protect your PHI in accordance with HIPAA regulations.
+                      We're building toward full technical, administrative, and physical safeguards for PHI in accordance with HIPAA regulations — see our HIPAA Privacy Notice for exactly what's true today.
                     </p>
                   </section>
 
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">6. Data Security and Storage</h2>
                     <p className="mb-3">
-                      We employ industry-standard security measures to protect your information, including:
+                      Here's what's actually true today, not an aspirational list:
                     </p>
                     <ul className="list-disc pl-6 space-y-1 mb-3">
-                      <li>End-to-end encryption for data transmission</li>
-                      <li>Encrypted storage of all health records and documents</li>
-                      <li>Regular security audits and vulnerability assessments</li>
-                      <li>Limited access controls and authentication requirements</li>
-                      <li>Secure backup and disaster recovery procedures</li>
+                      <li>Provider accounts can only see their own claimed listings and requests</li>
+                      <li>We never sell your data, and never share it without consent</li>
                     </ul>
-                    <p>
-                      However, no method of transmission over the Internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your information, we cannot guarantee absolute security.
+                    <p className="mb-3">
+                      <em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest,
+                      regular security audits, and formal backup/disaster-recovery procedures.
+                      However, no method of transmission over the Internet or electronic storage is
+                      ever 100% secure, even once those safeguards are added — we cannot guarantee
+                      absolute security.
                     </p>
                   </section>
 
@@ -135,7 +136,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">8. Third-Party Services</h2>
                     <p className="mb-3">
-                      Our Service may contain links to third-party websites or services that are not owned or controlled by HealthCare Portal. We have no control over, and assume no responsibility for, the content, privacy policies, or practices of any third-party websites or services.
+                      Our Service may contain links to third-party websites or services that are not owned or controlled by Starkwell. We have no control over, and assume no responsibility for, the content, privacy policies, or practices of any third-party websites or services.
                     </p>
                     <p>
                       You acknowledge and agree that we shall not be responsible or liable for any damage or loss caused by your use of any third-party content, goods, or services.
@@ -145,7 +146,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">9. Intellectual Property</h2>
                     <p className="mb-3">
-                      The Service and its original content, features, and functionality are and will remain the exclusive property of HealthCare Portal and its licensors. The Service is protected by copyright, trademark, and other laws.
+                      The Service and its original content, features, and functionality are and will remain the exclusive property of Starkwell and its licensors. The Service is protected by copyright, trademark, and other laws.
                     </p>
                     <p>
                       You retain all rights to any content you submit, post, or display on or through the Service. By submitting content, you grant us a worldwide, non-exclusive, royalty-free license to use, reproduce, and display such content solely for the purpose of providing the Service to you.
@@ -165,7 +166,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">11. Limitation of Liability</h2>
                     <p className="mb-3">
-                      To the maximum extent permitted by applicable law, HealthCare Portal shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, use, or goodwill.
+                      To the maximum extent permitted by applicable law, Starkwell shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, use, or goodwill.
                     </p>
                     <p>
                       Our total liability for any claims under these Terms shall not exceed the amount you paid us in the twelve (12) months preceding the claim.
@@ -195,10 +196,9 @@ export function TermsAndConditions() {
                       If you have any questions about these Terms, please contact us at:
                     </p>
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <p className="font-medium">HealthCare Portal</p>
-                      <p>Email: legal@healthcareportal.com</p>
-                      <p>Phone: 1-800-HEALTH-1</p>
-                      <p>Address: 123 Medical Center Drive, Suite 100</p>
+                      <p className="font-medium">Starkwell</p>
+                      <p>Email: legal@starkwell.com</p>
+                      <p>Address: Salt Lake City, Utah</p>
                     </div>
                   </section>
                 </div>

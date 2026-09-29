@@ -51,7 +51,7 @@ export function PrivacyPolicy() {
                   {/* Introduction */}
                   <section>
                     <p className="mb-3">
-                      At HealthCare Portal ("we," "us," or "our"), we are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our healthcare management platform.
+                      At Starkwell ("we," "us," or "our"), we are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our healthcare management platform.
                     </p>
                     <p className="mb-3">
                       Please read this Privacy Policy carefully. By accessing or using our Service, you acknowledge that you have read, understood, and agree to be bound by this Privacy Policy. If you do not agree with the terms of this Privacy Policy, please do not access the Service.
@@ -264,53 +264,36 @@ export function PrivacyPolicy() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">5. Data Security</h2>
                     <p className="mb-3">
-                      We implement robust security measures to protect your information from unauthorized access, alteration, disclosure, or destruction:
+                      Starkwell is a small, early-stage product. Here's what's actually true today,
+                      not an enterprise checklist we haven't earned yet:
                     </p>
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-blue-800 mb-2">Encryption</h4>
+                        <h4 className="font-semibold text-blue-800 mb-2">In place today</h4>
                         <ul className="text-sm space-y-1">
-                          <li>• TLS/SSL for data in transit</li>
-                          <li>• AES-256 encryption at rest</li>
-                          <li>• Encrypted database storage</li>
-                          <li>• End-to-end encryption for sensitive data</li>
+                          <li>• Providers can only see their own claimed listings and requests</li>
+                          <li>• We never sell your data, and never share it without consent</li>
+                          <li>• Passwordless accounts — no password to leak, by design</li>
                         </ul>
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-blue-800 mb-2">Access Controls</h4>
+                        <h4 className="font-semibold text-blue-800 mb-2">Not yet in place</h4>
                         <ul className="text-sm space-y-1">
+                          <li>• HTTPS (encryption in transit)</li>
+                          <li>• Encryption at rest</li>
                           <li>• Multi-factor authentication</li>
-                          <li>• Role-based access restrictions</li>
-                          <li>• Regular access audits</li>
-                          <li>• Automatic session timeouts</li>
-                        </ul>
-                      </div>
-
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-blue-800 mb-2">Infrastructure</h4>
-                        <ul className="text-sm space-y-1">
-                          <li>• Secure cloud hosting</li>
-                          <li>• Regular security updates</li>
-                          <li>• Firewall protection</li>
-                          <li>• Intrusion detection systems</li>
-                        </ul>
-                      </div>
-
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold text-blue-800 mb-2">Monitoring</h4>
-                        <ul className="text-sm space-y-1">
-                          <li>• 24/7 security monitoring</li>
-                          <li>• Regular vulnerability scans</li>
-                          <li>• Penetration testing</li>
-                          <li>• Incident response procedures</li>
+                          <li>• Third-party security audits and monitoring</li>
                         </ul>
                       </div>
                     </div>
 
                     <p className="text-sm mt-3 text-gray-600">
-                      While we strive to protect your information, no method of transmission or storage is 100% secure. We cannot guarantee absolute security but continuously work to improve our safeguards.
+                      We're building toward the items above rather than claiming they're finished.
+                      No method of transmission or storage is ever 100% secure, even once they're
+                      in place — we cannot guarantee absolute security, only that we'll tell you
+                      honestly what's actually done.
                     </p>
                   </section>
 
@@ -392,7 +375,7 @@ export function PrivacyPolicy() {
                     </div>
 
                     <p className="text-sm mt-4">
-                      To exercise these rights, please contact us at privacy@healthcareportal.com. We will respond to your request within 30 days.
+                      To exercise these rights, please contact us at privacy@starkwell.com. We will respond to your request within 30 days.
                     </p>
                   </section>
 
@@ -473,12 +456,10 @@ export function PrivacyPolicy() {
                       If you have questions, concerns, or requests regarding this Privacy Policy or our privacy practices, please contact us:
                     </p>
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <p className="font-medium mb-3">HealthCare Portal Privacy Team</p>
+                      <p className="font-medium mb-3">Starkwell Privacy Team</p>
                       <div className="space-y-1 text-sm">
-                        <p><strong>Email:</strong> privacy@healthcareportal.com</p>
-                        <p><strong>Phone:</strong> 1-800-PRIVACY-1 (1-800-774-8229)</p>
-                        <p><strong>Mail:</strong> Privacy Officer, HealthCare Portal, 123 Medical Center Drive, Suite 100</p>
-                        <p className="mt-3"><strong>Data Protection Officer:</strong> dpo@healthcareportal.com</p>
+                        <p><strong>Email:</strong> privacy@starkwell.com</p>
+                        <p><strong>Address:</strong> Salt Lake City, Utah</p>
                       </div>
                     </div>
                   </section>

@@ -54,8 +54,8 @@ export function ProvidersLanding() {
     },
     {
       icon: Calendar,
-      title: "Streamlined Scheduling",
-      description: "Reduce no-shows and phone tag with our integrated appointment booking system."
+      title: "Real Patient Leads",
+      description: "Patients who find your real price can request an appointment — it lands in your dashboard, ready to follow up on."
     },
     {
       icon: TrendingUp,
@@ -64,8 +64,8 @@ export function ProvidersLanding() {
     },
     {
       icon: Shield,
-      title: "HIPAA Compliant",
-      description: "Built on a secure platform with encryption and HIPAA compliance as a design requirement."
+      title: "No Data Sold, Ever",
+      description: "We never sell your practice's data or your patients' information — full HIPAA-level infrastructure is being built toward, not finished."
     },
     {
       icon: Zap,

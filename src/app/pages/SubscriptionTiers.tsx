@@ -188,7 +188,7 @@ export function SubscriptionTiers() {
               <CardContent className="p-6">
                 <h3 className="font-semibold text-gray-900 mb-2">What payment methods do you accept?</h3>
                 <p className="text-gray-600">
-                  We accept all major credit cards, debit cards, and digital payment methods. Your billing information is securely stored and encrypted.
+                  Billing isn't live yet — reach out and we'll set up payment by hand while this is built out.
                 </p>
               </CardContent>
             </Card>
@@ -204,7 +204,7 @@ export function SubscriptionTiers() {
               <CardContent className="p-6">
                 <h3 className="font-semibold text-gray-900 mb-2">Is my health information secure?</h3>
                 <p className="text-gray-600">
-                  Yes. We are fully HIPAA compliant and use industry-standard encryption to protect your personal and health information. Your data privacy is our top priority.
+                  We never sell your data and never share it without consent. Full HIPAA-level infrastructure is being built toward, not finished — see our HIPAA Notice for exactly what's true today.
                 </p>
               </CardContent>
             </Card>
