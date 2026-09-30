@@ -2968,13 +2968,18 @@ def hospital_stays(q_: Optional[str] = Query(None, alias="q", max_length=200)):
     coverage — "how much will my whole hospital stay cost", not just one
     line item. Real negotiated rates from the same insurer files as every
     other price on this site, not a Medicare estimate; see
-    build_hospital_stays.py for exactly how these were validated."""
+    build_hospital_stays.py for exactly how these were validated.
+
+    Matches against drg_desc AND search_terms (lay-language synonyms —
+    "heart attack" finds "ACUTE MYOCARDIAL INFARCTION" — see
+    drg_search_terms.py), the same "words a patient types" translation
+    layer the procedure catalog already uses."""
     if not HOSPITAL_STAY_PRICES.exists():
         raise HTTPException(503, "hospital stay data not available")
     where = ""
     params: list[Any] = []
     if q_ and q_.strip():
-        where = "WHERE lower(drg_desc) LIKE ?"
+        where = "WHERE lower(drg_desc || ' ' || coalesce(search_terms, '')) LIKE ?"
         params.append(f"%{q_.strip().lower()}%")
     rows = q(f"""
         SELECT drg_code, any_value(drg_desc) AS drg_desc,
