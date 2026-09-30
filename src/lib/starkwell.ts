@@ -845,3 +845,43 @@ export async function setAppointmentRequestStatus(id: number, status: "new" | "c
   });
   if (!res.ok) throw new Error(await readErrorDetail(res));
 }
+
+/** Whole hospital-stay bundle pricing (MS-DRG) — "how much will my whole
+ *  stay cost", not just one line item. Real negotiated commercial rates,
+ *  same insurer files as everything else on the site; see
+ *  build_hospital_stays.py for exactly how these were validated. */
+export interface HospitalStaySummary {
+  drg_code: number;
+  drg_desc: string;
+  friendly_name: string;
+  facility_count: number;
+  statewide_median_rate: number;
+}
+
+export async function searchHospitalStays(query?: string): Promise<HospitalStaySummary[]> {
+  const r = await get<{ results: HospitalStaySummary[] }>("/hospital-stays", { q: query });
+  return r.results;
+}
+
+export interface HospitalStayFacility {
+  npi: string;
+  facility_name: string;
+  city: string;
+  n_observations: number;
+  low_rate: number;
+  median_rate: number;
+  high_rate: number;
+}
+
+export interface HospitalStayDetail {
+  drg_code: number;
+  drg_desc: string;
+  friendly_name: string;
+  medicare_avg_paid: number | null;
+  facility_count: number;
+  facilities: HospitalStayFacility[];
+}
+
+export async function getHospitalStay(drgCode: number): Promise<HospitalStayDetail> {
+  return get<HospitalStayDetail>(`/hospital-stays/${drgCode}`);
+}

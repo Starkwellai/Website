@@ -116,6 +116,22 @@ CATALOG = Path(os.environ.get(
 NETWORK_RATES = Path(os.environ.get(
     "STARKWELL_NETWORK_RATES",
     "D:/Starkwell/data/reference/network_rates.parquet"))
+# Whole-stay bundle pricing (MS-DRG), built by build_hospital_stays.py.
+# Real negotiated commercial rates for 247 DRGs across ~217 Utah facilities —
+# same source files as everything else on the site, not a Medicare estimate.
+# Restricted to DRGs this repo has a real, verified plain-language name for;
+# see that script's docstring for why (never show a patient an unlabeled
+# "DRG 4471").
+HOSPITAL_STAY_PRICES = Path(os.environ.get(
+    "STARKWELL_HOSPITAL_STAY_PRICES",
+    "D:/Starkwell/data/reference/hospital_stay_prices.parquet"))
+# Utah-wide Medicare average paid per DRG, for reference alongside the real
+# commercial rate above — NOT joined per-facility (facility_drg.parquet keys
+# on CCN, price_summary keys on NPI, no crosswalk exists in this repo), so
+# this is a statewide number, not this specific hospital's Medicare rate.
+HOSPITAL_STAY_MEDICARE = Path(os.environ.get(
+    "STARKWELL_HOSPITAL_STAY_MEDICARE",
+    "D:/Starkwell/data/reference/hospital_stay_drg_medicare.parquet"))
 # Full NPI registry — entity_type, taxonomy_code, address/city/state, lat/lng.
 # The serving slice doesn't carry taxonomy_code (it's a service-price fact
 # table, not a provider dimension), so specialty has to come from here.
@@ -2915,6 +2931,103 @@ def facility_quality(facility_id: str):
     if not rows:
         raise HTTPException(404, f"no quality data for facility {facility_id}")
     return {"facility_id": facility_id, "count": len(rows), "results": rows}
+
+
+# ---- hospital stays (MS-DRG whole-stay bundle pricing) ---------------------
+
+def _friendly_drg_name(desc: str) -> str:
+    """CMS DRG titles are ALL CAPS medical shorthand ("CESAREAN SECTION
+    WITHOUT STERILIZATION WITH CC"). This doesn't invent or guess anything —
+    it reformats the exact same real title: spells out the standard CC/MCC
+    severity-tier suffix and title-cases the rest, so a patient reads
+    "Cesarean Section Without Sterilization (with complications)" instead of
+    all-caps shorthand with an unexplained acronym."""
+    d = desc.strip()
+    suffix = ""
+    # Order matters -- longer/more-specific suffixes must be checked before
+    # their shorter substrings ("WITH CC/MCC" before "WITH MCC" before
+    # "WITH CC", "WITHOUT CC/MCC" before "WITHOUT MCC").
+    for pattern, label in [
+        (r"\bWITHOUT CC/MCC$", " (no complications)"),
+        (r"\bWITH CC/MCC$", " (with complications)"),
+        (r"\bWITHOUT MCC$", " (no major complications)"),
+        (r"\bWITH MCC$", " (major complications)"),
+        (r"\bWITH CC$", " (with complications)"),
+    ]:
+        m = re.search(pattern, d)
+        if m:
+            d = d[: m.start()].strip()
+            suffix = label
+            break
+    return d.title() + suffix
+
+
+@app.get("/api/hospital-stays")
+def hospital_stays(q_: Optional[str] = Query(None, alias="q", max_length=200)):
+    """List every whole-stay bundle (MS-DRG) with real Utah commercial rate
+    coverage — "how much will my whole hospital stay cost", not just one
+    line item. Real negotiated rates from the same insurer files as every
+    other price on this site, not a Medicare estimate; see
+    build_hospital_stays.py for exactly how these were validated."""
+    if not HOSPITAL_STAY_PRICES.exists():
+        raise HTTPException(503, "hospital stay data not available")
+    where = ""
+    params: list[Any] = []
+    if q_ and q_.strip():
+        where = "WHERE lower(drg_desc) LIKE ?"
+        params.append(f"%{q_.strip().lower()}%")
+    rows = q(f"""
+        SELECT drg_code, any_value(drg_desc) AS drg_desc,
+               count(DISTINCT npi) AS facility_count,
+               round(median(median_rate)) AS statewide_median_rate
+        FROM read_parquet('{HOSPITAL_STAY_PRICES.as_posix()}')
+        {where}
+        GROUP BY drg_code
+        ORDER BY facility_count DESC
+    """, params)
+    for r in rows:
+        r["friendly_name"] = _friendly_drg_name(r["drg_desc"])
+    return {"count": len(rows), "results": rows}
+
+
+@app.get("/api/hospital-stays/{drg_code}")
+def hospital_stay_detail(drg_code: int):
+    """Facility-by-facility comparison for one whole-stay bundle, cheapest
+    first — same "median across everyone billing there, with the range
+    beside it" pattern PriceSearch uses for regular services. Medicare
+    average is a Utah-wide reference point, not this specific hospital's
+    Medicare rate — see HOSPITAL_STAY_MEDICARE's comment for why."""
+    if not HOSPITAL_STAY_PRICES.exists():
+        raise HTTPException(503, "hospital stay data not available")
+    facilities = q(f"""
+        SELECT npi, facility_name, city, n_observations, low_rate, median_rate, high_rate
+        FROM read_parquet('{HOSPITAL_STAY_PRICES.as_posix()}')
+        WHERE drg_code = ?
+        ORDER BY median_rate ASC
+    """, [drg_code])
+    if not facilities:
+        raise HTTPException(404, f"no data for DRG {drg_code}")
+    desc = q(f"""
+        SELECT any_value(drg_desc) AS drg_desc
+        FROM read_parquet('{HOSPITAL_STAY_PRICES.as_posix()}')
+        WHERE drg_code = ?
+    """, [drg_code])[0]["drg_desc"]
+    medicare_avg = None
+    if HOSPITAL_STAY_MEDICARE.exists():
+        m = q(f"""
+            SELECT medicare_avg_paid FROM read_parquet('{HOSPITAL_STAY_MEDICARE.as_posix()}')
+            WHERE drg_code = ?
+        """, [drg_code])
+        if m:
+            medicare_avg = m[0]["medicare_avg_paid"]
+    return {
+        "drg_code": drg_code,
+        "drg_desc": desc,
+        "friendly_name": _friendly_drg_name(desc),
+        "medicare_avg_paid": medicare_avg,
+        "facility_count": len(facilities),
+        "facilities": facilities,
+    }
 
 
 # Our service categories -> the CMS PUF benefit category that governs cost

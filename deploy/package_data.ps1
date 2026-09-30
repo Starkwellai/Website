@@ -20,6 +20,8 @@ $Files = @(
     "reference/plan_benefits.parquet",
     "reference/plan_network.parquet",
     "reference/shoppable_services.parquet",
+    "reference/hospital_stay_prices.parquet",
+    "reference/hospital_stay_drg_medicare.parquet",
     "reference/network_rates.parquet",
     "reference/nucc_taxonomy_251.csv",
     "providers.parquet"

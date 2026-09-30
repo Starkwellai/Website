@@ -17,6 +17,7 @@ import { About } from "./pages/About";
 import { Utah } from "./pages/Utah";
 import { NotFound } from "./pages/NotFound";
 import { PriceSearch } from "./pages/PriceSearch";
+import { HospitalStays } from "./pages/HospitalStays";
 import { NewPatientGuide } from "./pages/NewPatientGuide";
 import { SavedItems } from "./pages/SavedItems";
 import { Profile } from "./pages/Profile";
@@ -123,6 +124,10 @@ export const router = createBrowserRouter([
     // (/prices/mri-knee/provo), and URLs are expensive to change once indexed.
     path: "/prices",
     element: <PriceSearch />,
+  },
+  {
+    path: "/hospital-stays",
+    element: <HospitalStays />,
   },
 
   // Account pages (patient-facing, share Dashboard.tsx's internal header pattern).
