@@ -14,6 +14,23 @@ import {
   type HospitalStaySummary, type HospitalStayDetail,
 } from "../../lib/starkwell";
 
+// Hand-picked, not algorithmically derived (e.g. "most facilities") — the
+// goal is broad, recognizable starting points for someone who doesn't know
+// DRG terminology, same reasoning as PriceSearch's POPULAR_SEARCHES. `query`
+// is a verified-to-match substring against drg_desc/search_terms (see
+// drg_search_terms.py); `label` is the friendly text shown on the chip,
+// since a DRG has no single "display_name" the way a shoppable service does.
+const POPULAR_STAYS = [
+  { label: "Having a baby (vaginal delivery)", query: "having a baby" },
+  { label: "C-section", query: "c-section" },
+  { label: "Hip replacement", query: "hip replacement" },
+  { label: "Knee replacement", query: "knee replacement" },
+  { label: "Gallbladder removal", query: "gallbladder removal" },
+  { label: "Heart attack", query: "heart attack" },
+  { label: "Stroke", query: "stroke" },
+  { label: "Pneumonia", query: "pneumonia" },
+];
+
 /**
  * "How much will my whole hospital stay cost?" — a whole-stay bundle
  * (MS-DRG), not one line item. Real negotiated commercial rates from the
@@ -25,20 +42,27 @@ export function HospitalStays() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<HospitalStaySummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<HospitalStaySummary | null>(null);
   const [detail, setDetail] = useState<HospitalStayDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 766 real stay types is a real dataset, not a browsable list — no one
+  // visits this page to scroll past all of them. Only fetch once there's
+  // an actual query; an empty query shows the popular-search chips instead
+  // of dumping every result (sorted by facility count, so childbirth-
+  // related stays would dominate every first impression of this page).
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
+    if (!query.trim()) { setResults([]); setHasSearched(false); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     setError(null);
-    searchHospitalStays(query.trim() || undefined)
+    searchHospitalStays(query.trim())
       .then(r => { if (!cancelled) setResults(r); })
       .catch(() => { if (!cancelled) setError("Couldn't load hospital stay data — try again."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled) { setLoading(false); setHasSearched(true); } });
     return () => { cancelled = true; };
   }, [query]);
 
@@ -95,6 +119,22 @@ export function HospitalStays() {
               </CardContent>
             </Card>
 
+            {!query.trim() && (
+              <div className="flex flex-wrap gap-2 mb-6 max-w-2xl">
+                <span className="text-sm text-gray-500 w-full mb-1">Not sure what to search for? Try one of these:</span>
+                {POPULAR_STAYS.map(s => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() => setQuery(s.query)}
+                    className="text-sm px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3 max-w-2xl">
               <Info className="size-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-blue-900">
@@ -105,15 +145,19 @@ export function HospitalStays() {
 
             {error && <p className="text-red-700 mb-4">{error}</p>}
 
-            {loading ? (
+            {loading && (
               <div className="grid gap-3 sm:grid-cols-2 max-w-4xl">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-24 rounded-lg" />
                 ))}
               </div>
-            ) : results.length === 0 ? (
+            )}
+
+            {!loading && hasSearched && results.length === 0 && (
               <p className="text-gray-500">No matches — try fewer or different words.</p>
-            ) : (
+            )}
+
+            {!loading && results.length > 0 && (
               <div className="grid gap-3 sm:grid-cols-2 max-w-4xl">
                 {results.map(r => (
                   <button
