@@ -3000,7 +3000,11 @@ def hospital_stay_detail(drg_code: int):
     if not HOSPITAL_STAY_PRICES.exists():
         raise HTTPException(503, "hospital stay data not available")
     facilities = q(f"""
-        SELECT npi, facility_name, city, n_observations, low_rate, median_rate, high_rate
+        SELECT npi,
+               coalesce(cms_facility_name, facility_name) AS facility_name,
+               cms_facility_name IS NOT NULL AS cms_verified,
+               city, n_observations, low_rate, median_rate, high_rate,
+               overall_rating, patient_star, birthing_friendly = 'Y' AS birthing_friendly
         FROM read_parquet('{HOSPITAL_STAY_PRICES.as_posix()}')
         WHERE drg_code = ?
         ORDER BY median_rate ASC

@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
-import { Search, ArrowLeft, Building2, Info } from "lucide-react";
+import { Search, ArrowLeft, Building2, Info, Star, BadgeCheck } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
@@ -181,8 +181,33 @@ export function HospitalStays() {
                         <div className="flex items-center gap-3 min-w-0">
                           <Building2 className="size-5 text-blue-600 flex-shrink-0" />
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 truncate">{f.facility_name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-medium text-gray-900 truncate">{f.facility_name}</p>
+                              {f.cms_verified && (
+                                <BadgeCheck className="size-4 text-blue-500 flex-shrink-0" aria-label="CMS-verified hospital" />
+                              )}
+                            </div>
                             <p className="text-sm text-gray-500">{f.city}</p>
+                            {f.cms_verified && (f.overall_rating || f.patient_star != null) && (
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {f.overall_rating && (
+                                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-600">
+                                    <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                                    {f.overall_rating}/5 CMS rating
+                                  </span>
+                                )}
+                                {f.patient_star != null && (
+                                  <span className="text-xs text-gray-500">
+                                    · {f.patient_star}/5 patient experience
+                                  </span>
+                                )}
+                                {f.birthing_friendly && (
+                                  <Badge variant="outline" className="text-xs border-pink-200 text-pink-700 bg-pink-50">
+                                    Birthing friendly
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">

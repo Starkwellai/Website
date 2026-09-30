@@ -866,11 +866,21 @@ export async function searchHospitalStays(query?: string): Promise<HospitalStayS
 export interface HospitalStayFacility {
   npi: string;
   facility_name: string;
+  /** True when facility_name is CMS's own verified hospital name (an
+   *  address-matched join to facility_dim.parquet), not just the raw NPI
+   *  registry business name. */
+  cms_verified: boolean;
   city: string;
   n_observations: number;
   low_rate: number;
   median_rate: number;
   high_rate: number;
+  /** CMS overall hospital star rating, "1"-"5" — only present when
+   *  cms_verified is true. */
+  overall_rating: string | null;
+  /** HCAHPS patient-experience star, 1-5 — only present when cms_verified. */
+  patient_star: number | null;
+  birthing_friendly: boolean;
 }
 
 export interface HospitalStayDetail {
