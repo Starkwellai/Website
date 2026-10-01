@@ -3150,25 +3150,35 @@ def hospital_stay_detail(drg_code: int):
     }
 
 
-def _friendly_dosage_form(raw: str) -> str:
+def _friendly_dosage_form(raw: str, drug_name: str) -> str:
     """Cost Plus Drugs' own dosage_form slugs ("abacavir-sulfate-300mg-
     tablet-ziagen") are real and specific, just URL-formatted. This is pure
-    reformatting of their exact text — dashes to spaces, a space inserted
-    between a number and the unit that follows it, common units
-    capitalized — never a guess at strength or form.
+    reformatting of their exact text — never a guess at strength or form.
+
+    The slug's leading drug-name portion is stripped and replaced with the
+    real drug_name as-is (checked: affects 716 of 8257 rows, mostly combo
+    drugs like "Lisinopril / HCTZ") rather than title-cased from the slug —
+    for a multi-word combo name the slug runs the words together with no
+    separator ("lisinoprilhctz-10mg-..."), which title-casing alone can't
+    recover ("Lisinoprilhctz"). Only the strength/form suffix is parsed from
+    the slug itself.
 
     An underscore between two digits is their decimal point ("lisinopril-
     2_5mg-tablet" = 2.5mg) and must be restored before the generic
     underscore->space pass below, which is for combo-drug strength
     separators ("...600mg_300mg-tablet") where it really does mean a space."""
-    s = raw.replace("-", " ")
+    name_slug = re.sub(r"[^a-z0-9]", "", drug_name.lower())
+    s = raw
+    if name_slug and s.lower().startswith(name_slug):
+        s = s[len(name_slug):].lstrip("-_")
+    s = s.replace("-", " ")
     s = re.sub(r"(\d)_(\d)", r"\1.\2", s)
     s = s.replace("_", " ")
     s = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", s)
     s = s.title()
     for unit in ("Mg", "Ml", "Mcg", "Gm", "Iu"):
         s = re.sub(rf"\b{unit}\b", unit.upper(), s)
-    return s
+    return f"{drug_name} {s}".strip()
 
 
 @app.get("/api/drugs")
@@ -3213,7 +3223,7 @@ def drug_detail(name: str = Query(..., max_length=300)):
     if not rows:
         raise HTTPException(404, f"no data for {name}")
     for r in rows:
-        r["friendly_dosage_form"] = _friendly_dosage_form(r["dosage_form"])
+        r["friendly_dosage_form"] = _friendly_dosage_form(r["dosage_form"], name)
     return {
         "drug_name": name,
         "source": "costplusdrugs.com",

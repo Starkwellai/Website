@@ -363,9 +363,9 @@ export function Utah() {
                   <span>{searchMode === "medications" ? "Searching drug database..." : "Searching pricing database..."}</span>
                 </div>
               ) : searchMode === "medications" ? (
-                drugResults && (drugResults.costplus.length > 0 || drugResults.nadac.length > 0) ? (
+                drugResults && ((drugResults.costplus?.length ?? 0) > 0 || (drugResults.nadac?.length ?? 0) > 0) ? (
                   <div className="space-y-8">
-                    {drugResults.costplus.length > 0 && (
+                    {(drugResults.costplus?.length ?? 0) > 0 && (
                       <div>
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
                           Cost Plus Drugs — Retail Price
@@ -392,7 +392,7 @@ export function Utah() {
                         </div>
                       </div>
                     )}
-                    {drugResults.nadac.length > 0 && (
+                    {(drugResults.nadac?.length ?? 0) > 0 && (
                       <div>
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
                           NADAC — Pharmacy Acquisition Cost (per unit)
