@@ -937,3 +937,45 @@ export interface HospitalStayDetail {
 export async function getHospitalStay(drgCode: number): Promise<HospitalStayDetail> {
   return get<HospitalStayDetail>(`/hospital-stays/${drgCode}`);
 }
+
+/**
+ * "What does Cost Plus Drugs charge for this?" — NOT a Utah pharmacy
+ * comparison. The commercial insurer data that powers every other price on
+ * this site was checked first and has zero real pharmacies in it (see
+ * DRUG_PRICES's comment in serving_api.py) — insurer price-transparency
+ * files cover medical claims, not pharmacy-benefit claims. This instead
+ * surfaces Cost Plus Drugs' own published mail-order cash prices: real,
+ * current, and verifiable (every result links to their own page), but ONE
+ * specific pharmacy's price, not a market comparison. Every surface
+ * rendering this data must make that single-source nature obvious, not
+ * imply "shop around Utah pharmacies" the way PriceSearch/HospitalStays do.
+ */
+export interface DrugSummary {
+  drug_name: string;
+  min_price: number;
+  variant_count: number;
+}
+
+export async function searchDrugs(query?: string): Promise<DrugSummary[]> {
+  const r = await get<{ results: DrugSummary[] }>("/drugs", { q: query });
+  return r.results;
+}
+
+export interface DrugVariant {
+  dosage_form: string;
+  friendly_dosage_form: string;
+  price: number;
+  /** Direct link to Cost Plus Drugs' own page for this exact strength/form —
+   *  always show this, so a visitor can confirm the real current price
+   *  themselves rather than trusting a number from this snapshot. */
+  url: string;
+}
+
+export interface DrugDetail {
+  drug_name: string;
+  variants: DrugVariant[];
+}
+
+export async function getDrug(drugName: string): Promise<DrugDetail> {
+  return get<DrugDetail>("/drugs/detail", { name: drugName });
+}

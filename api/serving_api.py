@@ -133,6 +133,23 @@ HOSPITAL_STAY_PRICES = Path(os.environ.get(
 HOSPITAL_STAY_MEDICARE = Path(os.environ.get(
     "STARKWELL_HOSPITAL_STAY_MEDICARE",
     "D:/Starkwell/data/reference/hospital_stay_drg_medicare.parquet"))
+# Cost Plus Drugs' own published cash prices — ONE specific online (mail-
+# order) pharmacy's real, current prices for ~880 generic/brand drugs, not a
+# Utah pharmacy comparison. The commercial insurer files that power every
+# other price on this site were checked first (code_type='NDC' in
+# price_summary) and rejected for this: zero of the entities billing those
+# NDC rates are real pharmacies (checked against NPPES taxonomy codes AND by
+# name — no Walgreens, CVS, Smith's, etc. anywhere; Utah has 601 registered
+# pharmacy NPIs and none appear) because insurer price-transparency files
+# cover medical claims, not pharmacy-benefit claims. Cost Plus Drugs
+# publishes its own real retail price list, which is what this reads
+# directly — no build step, no join, just the CSV as shipped. Every API
+# response and UI surface that touches this data must make unmistakably
+# clear it's one specific pharmacy's price, not a market comparison — see
+# the /api/drugs endpoints' docstrings.
+DRUG_PRICES = Path(os.environ.get(
+    "STARKWELL_DRUG_PRICES",
+    "D:/Starkwell/data/reference/costplus_drug_prices.csv"))
 # Full NPI registry — entity_type, taxonomy_code, address/city/state, lat/lng.
 # The serving slice doesn't carry taxonomy_code (it's a service-price fact
 # table, not a provider dimension), so specialty has to come from here.
@@ -3130,6 +3147,77 @@ def hospital_stay_detail(drg_code: int):
         "medicare_avg_paid": medicare_avg,
         "facility_count": len(facilities),
         "facilities": facilities,
+    }
+
+
+def _friendly_dosage_form(raw: str) -> str:
+    """Cost Plus Drugs' own dosage_form slugs ("abacavir-sulfate-300mg-
+    tablet-ziagen") are real and specific, just URL-formatted. This is pure
+    reformatting of their exact text — dashes to spaces, a space inserted
+    between a number and the unit that follows it, common units
+    capitalized — never a guess at strength or form.
+
+    An underscore between two digits is their decimal point ("lisinopril-
+    2_5mg-tablet" = 2.5mg) and must be restored before the generic
+    underscore->space pass below, which is for combo-drug strength
+    separators ("...600mg_300mg-tablet") where it really does mean a space."""
+    s = raw.replace("-", " ")
+    s = re.sub(r"(\d)_(\d)", r"\1.\2", s)
+    s = s.replace("_", " ")
+    s = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", s)
+    s = s.title()
+    for unit in ("Mg", "Ml", "Mcg", "Gm", "Iu"):
+        s = re.sub(rf"\b{unit}\b", unit.upper(), s)
+    return s
+
+
+@app.get("/api/drugs")
+def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200)):
+    """Cost Plus Drugs' own published cash prices — ONE specific online
+    (mail-order) pharmacy's real prices, not a market comparison. See
+    DRUG_PRICES's comment for why this exists instead of a Utah-pharmacy
+    comparison (the commercial insurer data has no real pharmacies in it)."""
+    if not DRUG_PRICES.exists():
+        raise HTTPException(503, "drug price data not available")
+    where = ""
+    params: list[Any] = []
+    if q_ and q_.strip():
+        where = "WHERE lower(drug_name) LIKE ?"
+        params.append(f"%{q_.strip().lower()}%")
+    rows = q(f"""
+        SELECT drug_name, round(min(price), 2) AS min_price,
+               count(DISTINCT dosage_form) AS variant_count
+        FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
+        {where}
+        GROUP BY drug_name
+        ORDER BY drug_name
+    """, params)
+    return {"count": len(rows), "results": rows, "source": "costplusdrugs.com"}
+
+
+@app.get("/api/drugs/detail")
+def drug_detail(name: str = Query(..., max_length=300)):
+    """Every strength/form Cost Plus Drugs lists for one drug, cheapest
+    price point first, each linking straight to their own page — so a
+    visitor can verify the real, current price themselves rather than
+    trusting a number frozen at whatever this file was last refreshed."""
+    if not DRUG_PRICES.exists():
+        raise HTTPException(503, "drug price data not available")
+    rows = q(f"""
+        SELECT dosage_form, round(min(price), 2) AS price, any_value(url) AS url
+        FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
+        WHERE drug_name = ?
+        GROUP BY dosage_form
+        ORDER BY price ASC
+    """, [name])
+    if not rows:
+        raise HTTPException(404, f"no data for {name}")
+    for r in rows:
+        r["friendly_dosage_form"] = _friendly_dosage_form(r["dosage_form"])
+    return {
+        "drug_name": name,
+        "source": "costplusdrugs.com",
+        "variants": rows,
     }
 
 

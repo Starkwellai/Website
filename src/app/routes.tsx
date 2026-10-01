@@ -19,6 +19,7 @@ import { NotFound } from "./pages/NotFound";
 import { PriceSearch } from "./pages/PriceSearch";
 import { FacilityProfile } from "./pages/FacilityProfile";
 import { HospitalStays } from "./pages/HospitalStays";
+import { DrugPrices } from "./pages/DrugPrices";
 import { NewPatientGuide } from "./pages/NewPatientGuide";
 import { SavedItems } from "./pages/SavedItems";
 import { Profile } from "./pages/Profile";
@@ -132,6 +133,10 @@ export const router = createBrowserRouter([
     // can't be reversed back into a place.
     path: "/facility/:facilityKey",
     element: <FacilityProfile />,
+  },
+  {
+    path: "/drug-prices",
+    element: <DrugPrices />,
   },
   {
     path: "/hospital-stays",
