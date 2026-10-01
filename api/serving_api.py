@@ -3176,10 +3176,25 @@ def _friendly_dosage_form(raw: str, drug_name: str, include_name: bool = True) -
     2_5mg-tablet" = 2.5mg) and must be restored before the generic
     underscore->space pass below, which is for combo-drug strength
     separators ("...600mg_300mg-tablet") where it really does mean a space."""
+    # Walks s counting only alphanumerics so the comparison is separator-
+    # insensitive on BOTH sides — needed because the slug sometimes keeps a
+    # dash between a combo drug's words ("amlodipine-atorvastatin-10-...")
+    # and sometimes doesn't ("lisinoprilhctz-10mg-..."); a plain
+    # s.startswith(name_slug) only caught the second form and silently left
+    # the first one's name doubled when include_name=True later prepended
+    # the real name on top of the never-stripped slug.
     name_slug = re.sub(r"[^a-z0-9]", "", drug_name.lower())
     s = raw
-    if name_slug and s.lower().startswith(name_slug):
-        s = s[len(name_slug):].lstrip("-_")
+    if name_slug:
+        norm_count, cut = 0, 0
+        for i, ch in enumerate(s):
+            if ch.isalnum():
+                norm_count += 1
+            if norm_count == len(name_slug):
+                cut = i + 1
+                break
+        if cut and re.sub(r"[^a-z0-9]", "", s[:cut].lower()) == name_slug:
+            s = s[cut:].lstrip("-_")
     s = s.replace("-", " ")
     s = re.sub(r"(\d)_(\d)", r"\1.\2", s)
     s = s.replace("_", " ")
@@ -3187,6 +3202,14 @@ def _friendly_dosage_form(raw: str, drug_name: str, include_name: bool = True) -
     s = s.title()
     for unit in ("Mg", "Ml", "Mcg", "Gm", "Iu"):
         s = re.sub(rf"\b{unit}\b", unit.upper(), s)
+    # A combo drug's two strengths share one trailing unit in the slug
+    # ("amlodipine-atorvastatin-10-10mg-..." -> "10 10 MG") — genuinely
+    # ambiguous as two bare numbers in a row. "10/10 MG" is how a combo
+    # strength is conventionally written, so insert the slash the slug
+    # itself doesn't have. Checked: doesn't touch combo drugs whose slug
+    # already pairs each number with its own unit ("...10mg_12_5mg..." ->
+    # "10 MG 12.5 MG"), which isn't ambiguous and shouldn't be touched.
+    s = re.sub(r"(?<!\d)(\d+(?:\.\d+)?) (\d+(?:\.\d+)?) (MG|ML|MCG|GM|IU)\b", r"\1/\2 \3", s)
     s = s.strip()
     return f"{drug_name} {s}".strip() if include_name else s
 
@@ -3220,14 +3243,25 @@ def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200),
     if q_ and q_.strip():
         where = "WHERE lower(drug_name) LIKE ?"
         params.append(f"%{q_.strip().lower()}%")
+    # `limit` caps the number of distinct DRUGS, not raw rows — capping rows
+    # directly cut drugs off mid-strength-list (checked: "metformin" with a
+    # row limit showed the plain "Metformin" with only 2 of its real 3
+    # strengths, and silently dropped several real metformin combos
+    # entirely). Any drug_name that appears here always has its complete,
+    # real variant set.
     costplus = q(f"""
-        SELECT drug_name, dosage_form, round(min(price), 2) AS min_price,
-               round(max(price), 2) AS max_price, any_value(url) AS url
-        FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
-        {where}
-        GROUP BY drug_name, dosage_form
-        ORDER BY drug_name
-        LIMIT {int(limit)}
+        WITH matched AS (
+            SELECT DISTINCT drug_name FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
+            {where}
+            ORDER BY drug_name
+            LIMIT {int(limit)}
+        )
+        SELECT c.drug_name, c.dosage_form, round(min(c.price), 2) AS min_price,
+               round(max(c.price), 2) AS max_price, any_value(c.url) AS url
+        FROM read_csv_auto('{DRUG_PRICES.as_posix()}') c
+        JOIN matched m ON m.drug_name = c.drug_name
+        GROUP BY c.drug_name, c.dosage_form
+        ORDER BY c.drug_name
     """, params)
     for r in costplus:
         r["dosage_form"] = _friendly_dosage_form(r["dosage_form"], r["drug_name"], include_name=False)
