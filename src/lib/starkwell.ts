@@ -956,9 +956,53 @@ export interface DrugSummary {
   variant_count: number;
 }
 
+/** Raw row shape /api/drugs' "costplus" array returns — one per
+ *  (drug_name, dosage_form), not yet grouped into a per-drug summary. Also
+ *  used directly by Utah Hub's medication search, which wants this exact
+ *  granularity rather than DrugSummary's rollup. */
+export interface CostPlusVariant {
+  drug_name: string;
+  dosage_form: string;
+  min_price: number;
+  max_price: number;
+  url: string;
+}
+
+/** CMS's National Average Drug Acquisition Cost — a national wholesale
+ *  benchmark, not a retail price. See /api/drugs' docstring. */
+export interface NadacReference {
+  ndc_description: string;
+  nadac_per_unit: number;
+  unit: string;
+  otc: string;
+}
+
+export interface DrugSearchResponse {
+  query: string;
+  costplus: CostPlusVariant[];
+  nadac: NadacReference[];
+}
+
+export async function searchDrugsRaw(query: string, limit = 20): Promise<DrugSearchResponse> {
+  return get<DrugSearchResponse>("/drugs", { q: query, limit });
+}
+
+/** DrugPrices.tsx's list view wants one row per drug, not per strength —
+ *  grouped here client-side from the same real costplus rows Utah Hub's
+ *  search uses, rather than running two differently-shaped queries
+ *  server-side for what's ultimately the same underlying data. */
 export async function searchDrugs(query?: string): Promise<DrugSummary[]> {
-  const r = await get<{ results: DrugSummary[] }>("/drugs", { q: query });
-  return r.results;
+  if (!query) return [];
+  const { costplus } = await searchDrugsRaw(query, 100);
+  const byName = new Map<string, { min: number; count: number }>();
+  for (const v of costplus) {
+    const cur = byName.get(v.drug_name);
+    if (cur) { cur.min = Math.min(cur.min, v.min_price); cur.count += 1; }
+    else byName.set(v.drug_name, { min: v.min_price, count: 1 });
+  }
+  return Array.from(byName.entries())
+    .map(([drug_name, { min, count }]) => ({ drug_name, min_price: min, variant_count: count }))
+    .sort((a, b) => a.drug_name.localeCompare(b.drug_name));
 }
 
 export interface DrugVariant {

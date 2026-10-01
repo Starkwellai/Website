@@ -9,7 +9,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
-import { Search, Activity, Stethoscope, Bone, Smile, Eye, Heart, MapPin, Star, DollarSign, Shield, CheckCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Search, Activity, Stethoscope, Bone, Smile, Eye, Heart, MapPin, Star, DollarSign, Shield, CheckCircle, ChevronDown, ChevronUp, Loader2, AlertTriangle } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
@@ -365,10 +365,24 @@ export function Utah() {
               ) : searchMode === "medications" ? (
                 drugResults && ((drugResults.costplus?.length ?? 0) > 0 || (drugResults.nadac?.length ?? 0) > 0) ? (
                   <div className="space-y-8">
+                    {/* Load-bearing, not boilerplate — see DrugPrices.tsx's
+                        own copy of this same disclosure. Neither number
+                        below is a Utah pharmacy's price: one is a single
+                        mail-order pharmacy's real price, the other is a
+                        national wholesale-cost benchmark. */}
+                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <AlertTriangle className="size-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-900">
+                        <strong>Not a Utah pharmacy comparison.</strong> Cost Plus Drugs is one specific mail-order
+                        pharmacy&rsquo;s real price. NADAC is a national government benchmark for what pharmacies pay
+                        to acquire a drug, not a price you&rsquo;d be quoted anywhere. Neither reflects what a Utah
+                        pharmacy counter or your insurance would charge.
+                      </p>
+                    </div>
                     {(drugResults.costplus?.length ?? 0) > 0 && (
                       <div>
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
-                          Cost Plus Drugs — Retail Price
+                          Cost Plus Drugs — Mail-Order Cash Price
                         </h3>
                         <div className="space-y-2">
                           {drugResults.costplus.map((d, i) => (

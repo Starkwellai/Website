@@ -150,6 +150,14 @@ HOSPITAL_STAY_MEDICARE = Path(os.environ.get(
 DRUG_PRICES = Path(os.environ.get(
     "STARKWELL_DRUG_PRICES",
     "D:/Starkwell/data/reference/costplus_drug_prices.csv"))
+# CMS's own National Average Drug Acquisition Cost file — a real national
+# benchmark for what pharmacies pay to acquire a drug, not a retail/patient
+# price. Shown alongside Cost Plus Drugs as a second, differently-sourced
+# reference point on Utah Hub's medication search; each is labeled for what
+# it actually is rather than blended into one number.
+NADAC_PRICES = Path(os.environ.get(
+    "STARKWELL_NADAC_PRICES",
+    "D:/Starkwell/data/reference/nadac_current_rates.csv"))
 # Full NPI registry — entity_type, taxonomy_code, address/city/state, lat/lng.
 # The serving slice doesn't carry taxonomy_code (it's a service-price fact
 # table, not a provider dimension), so specialty has to come from here.
@@ -3150,18 +3158,19 @@ def hospital_stay_detail(drg_code: int):
     }
 
 
-def _friendly_dosage_form(raw: str, drug_name: str) -> str:
+def _friendly_dosage_form(raw: str, drug_name: str, include_name: bool = True) -> str:
     """Cost Plus Drugs' own dosage_form slugs ("abacavir-sulfate-300mg-
     tablet-ziagen") are real and specific, just URL-formatted. This is pure
     reformatting of their exact text — never a guess at strength or form.
 
-    The slug's leading drug-name portion is stripped and replaced with the
+    The slug's leading drug-name portion is stripped and, when include_name
+    (the drug_name isn't shown separately by the caller), replaced with the
     real drug_name as-is (checked: affects 716 of 8257 rows, mostly combo
     drugs like "Lisinopril / HCTZ") rather than title-cased from the slug —
     for a multi-word combo name the slug runs the words together with no
     separator ("lisinoprilhctz-10mg-..."), which title-casing alone can't
     recover ("Lisinoprilhctz"). Only the strength/form suffix is parsed from
-    the slug itself.
+    the slug itself either way.
 
     An underscore between two digits is their decimal point ("lisinopril-
     2_5mg-tablet" = 2.5mg) and must be restored before the generic
@@ -3178,15 +3187,32 @@ def _friendly_dosage_form(raw: str, drug_name: str) -> str:
     s = s.title()
     for unit in ("Mg", "Ml", "Mcg", "Gm", "Iu"):
         s = re.sub(rf"\b{unit}\b", unit.upper(), s)
-    return f"{drug_name} {s}".strip()
+    s = s.strip()
+    return f"{drug_name} {s}".strip() if include_name else s
 
 
 @app.get("/api/drugs")
-def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200)):
-    """Cost Plus Drugs' own published cash prices — ONE specific online
-    (mail-order) pharmacy's real prices, not a market comparison. See
-    DRUG_PRICES's comment for why this exists instead of a Utah-pharmacy
-    comparison (the commercial insurer data has no real pharmacies in it)."""
+def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200),
+          limit: int = Query(20, ge=1, le=100)):
+    """Two independently-sourced real drug price references — NOT a Utah
+    pharmacy comparison, and the two numbers are NOT the same kind of thing:
+
+    costplus: Cost Plus Drugs' own published cash prices. ONE specific
+    online (mail-order) pharmacy's real, current, verifiable prices
+    (min/max across their own package sizes for one strength/form), each
+    linking to their own page. See DRUG_PRICES's comment for why this
+    exists instead of a Utah-pharmacy comparison — the commercial insurer
+    data has no real pharmacies billing in it.
+
+    nadac: CMS's National Average Drug Acquisition Cost — what pharmacies
+    nationally pay, on average, to ACQUIRE the drug. A wholesale benchmark,
+    not a retail price a patient would be quoted anywhere. Grouped by
+    ndc_description (one row per real drug name+strength, collapsing the
+    many manufacturer NDCs that share it) — same "many codes, one real
+    thing" pattern used throughout this file.
+
+    Both results are capped at `limit` independently; this is a quick
+    reference search, not a paginated catalog."""
     if not DRUG_PRICES.exists():
         raise HTTPException(503, "drug price data not available")
     where = ""
@@ -3194,15 +3220,36 @@ def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200)):
     if q_ and q_.strip():
         where = "WHERE lower(drug_name) LIKE ?"
         params.append(f"%{q_.strip().lower()}%")
-    rows = q(f"""
-        SELECT drug_name, round(min(price), 2) AS min_price,
-               count(DISTINCT dosage_form) AS variant_count
+    costplus = q(f"""
+        SELECT drug_name, dosage_form, round(min(price), 2) AS min_price,
+               round(max(price), 2) AS max_price, any_value(url) AS url
         FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
         {where}
-        GROUP BY drug_name
+        GROUP BY drug_name, dosage_form
         ORDER BY drug_name
+        LIMIT {int(limit)}
     """, params)
-    return {"count": len(rows), "results": rows, "source": "costplusdrugs.com"}
+    for r in costplus:
+        r["dosage_form"] = _friendly_dosage_form(r["dosage_form"], r["drug_name"], include_name=False)
+
+    nadac: list[dict] = []
+    if NADAC_PRICES.exists():
+        where_n = ""
+        params_n: list[Any] = []
+        if q_ and q_.strip():
+            where_n = "WHERE lower(ndc_description) LIKE ?"
+            params_n.append(f"%{q_.strip().lower()}%")
+        nadac = q(f"""
+            SELECT ndc_description, round(median(nadac_per_unit), 4) AS nadac_per_unit,
+                   any_value(pricing_unit) AS unit, any_value(otc) AS otc
+            FROM read_csv_auto('{NADAC_PRICES.as_posix()}')
+            {where_n}
+            GROUP BY ndc_description
+            ORDER BY ndc_description
+            LIMIT {int(limit)}
+        """, params_n)
+
+    return {"query": q_ or "", "costplus": costplus, "nadac": nadac}
 
 
 @app.get("/api/drugs/detail")

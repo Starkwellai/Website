@@ -24,6 +24,7 @@ $Files = @(
     "reference/hospital_stay_drg_medicare.parquet",
     "reference/network_rates.parquet",
     "reference/costplus_drug_prices.csv",
+    "reference/nadac_current_rates.csv",
     "reference/nucc_taxonomy_251.csv",
     "providers.parquet"
 )
