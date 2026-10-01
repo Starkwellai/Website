@@ -25,7 +25,6 @@ const LINKS: NavLink[] = [
   { label: "For Providers" },
   { label: "Compare Prices", to: "/prices" },
   { label: "Hospital Stays", to: "/hospital-stays" },
-  { label: "Prescriptions", to: "/drug-prices" },
   { label: "Saved", to: "/saved" },
   { label: "Utah Hub", to: "/utah" },
   { label: "About", to: "/about" },

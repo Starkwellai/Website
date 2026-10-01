@@ -1056,6 +1056,20 @@ export function PriceSearch() {
                 {!loading && services.length === 0 && !error && (
                   <div className="sm:col-span-2 space-y-3">
                     <p className="text-gray-500">No procedures matched “{query}”.</p>
+                    {/* Quiet, contextual — not a nav-level destination. Shows
+                        up exactly when someone typed a drug name into the
+                        procedure search and got nothing, which is the one
+                        moment this is actually relevant. */}
+                    <p className="text-sm text-gray-500">
+                      Looking for a prescription instead?{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/drug-prices")}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Check Cost Plus Drugs prices
+                      </button>
+                    </p>
                     {!aiTried && (
                       <div className="space-y-2 max-w-lg">
                         <p className="text-sm text-gray-600">
