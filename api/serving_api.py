@@ -45,6 +45,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -222,6 +223,19 @@ def _facility_key(address: str, city: str) -> str:
     from, which is what lets reviews for one hospital aggregate correctly
     across every one of the 705 services it happens to offer."""
     return hashlib.sha256(f"{address}|{city}".encode()).hexdigest()[:16]
+
+
+def _miles_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in miles. Only ever called on `location_grade ==
+    'exact'` coordinates — an 'approximate' row's lat/lng is a geocoded area
+    centroid, not a real point, and a distance computed from it would look
+    precise while being fiction. See facility_rows()'s near_lat/near_lng
+    handling for where that line is drawn."""
+    r = 3958.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return r * 2 * math.asin(math.sqrt(a))
 
 # Allow-listed ORDER BY clauses. The sort key is validated by the route's regex
 # and then looked up here, so no user string ever reaches the SQL text.
@@ -2040,6 +2054,8 @@ def facility_rows(
         None, description="price every location for this plan"),
     deductible_remaining: Optional[float] = Query(
         None, description="how much deductible is left; defaults to the plan's full amount"),
+    near_lat: Optional[float] = Query(None, description="patient location, for distance_miles"),
+    near_lng: Optional[float] = Query(None, description="patient location, for distance_miles"),
     limit: int = Query(25, ge=1, le=200),
 ):
     """Places, not payees — the first layer of "where do I go".
@@ -2172,6 +2188,25 @@ def facility_rows(
     for r in rows:
         r["facility_key"] = _facility_key(r["address"], r["city"])
 
+    # ---- optional: distance from the patient --------------------------------
+    # Only computed for location_grade == 'exact'. An 'approximate' row's
+    # lat/lng is a geocoded area centroid — see _miles_between()'s docstring —
+    # so it gets distance_miles=None rather than a number that looks precise
+    # and isn't. Distance becomes the sort key only when no plan was supplied;
+    # a selected plan's your_cost ordering below is more specific to what the
+    # patient asked for and takes priority.
+    if near_lat is not None and near_lng is not None:
+        for r in rows:
+            if r.get("location_grade") == "exact" and r.get("lat") is not None and r.get("lng") is not None:
+                r["distance_miles"] = round(_miles_between(near_lat, near_lng, r["lat"], r["lng"]), 1)
+            else:
+                r["distance_miles"] = None
+        if not plan_id:
+            rows.sort(key=lambda r: (r.get("distance_miles") is None, r.get("distance_miles") or 0))
+    else:
+        for r in rows:
+            r["distance_miles"] = None
+
     # ---- optional: price every location for one plan -----------------------
     # Done here rather than by calling /estimate 25 times: one query for the
     # network rates, then the cost-sharing arithmetic per row in Python.
@@ -2242,6 +2277,65 @@ def facility_rows(
                                      r.get("your_cost") or 0))
 
     return {"service_key": service_key, "count": len(rows), "results": rows}
+
+
+@app.get("/api/facilities/{facility_key}/services")
+def facility_services(facility_key: str, address: str, city: str):
+    """The reverse of facility_rows() — every service_key priced at ONE
+    address, for a facility profile page. facility_key is opaque (a hash —
+    see _facility_key), so the caller must also supply the real address/city
+    it was derived from; recomputing the hash here and checking it matches is
+    the same "prove you know what this key means" pattern claim_listing()
+    uses, not an auth check, just protection against a stale or hand-edited
+    link silently showing the wrong place's prices.
+
+    Deliberately not folded into facility_rows (service -> facilities): that
+    endpoint's WHERE starts from service_key and GROUPs by address; this one
+    starts from address and GROUPs by service_key. Same `prices` table, two
+    different directions through it.
+    """
+    addr_u, city_u = address.upper().strip(), city.upper().strip()
+    if _facility_key(addr_u, city_u) != facility_key:
+        raise HTTPException(400, "facility_key does not match address/city")
+
+    have_dim = FACILITIES.exists()
+    name_col = "NULL AS facility_name, NULL AS rating, NULL AS facility_kind, NULL AS facility_id, NULL AS patient_star, NULL AS surveys"
+    join = ""
+    if have_dim:
+        name_col = ("any_value(f.facility_name) AS facility_name, any_value(f.overall_rating) AS rating, "
+                    "any_value(f.facility_kind) AS facility_kind, any_value(f.facility_id) AS facility_id, "
+                    "any_value(f.patient_star) AS patient_star, any_value(f.surveys) AS surveys")
+        join = f"""
+          LEFT JOIN (
+            SELECT {norm_addr('d.address')} AS naddr, upper(trim(d.city)) AS ncity,
+                   d.facility_name, d.overall_rating, d.facility_kind, d.facility_id,
+                   d.patient_star, d.surveys
+            FROM read_parquet('{FACILITIES.as_posix()}') d
+          ) f ON f.naddr = {norm_addr('s.address')} AND f.ncity = upper(trim(s.city))"""
+
+    rows = q(f"""
+        SELECT service_key, any_value(display_name) AS display_name, any_value(category) AS category,
+               count(DISTINCT npi) AS providers, median(median_rate) AS median_price
+        FROM prices s
+        {join}
+        WHERE upper(trim(s.address)) = ? AND upper(trim(s.city)) = ? AND s.is_primary
+        GROUP BY service_key
+        ORDER BY providers DESC
+    """, [addr_u, city_u])
+    if not rows:
+        raise HTTPException(404, "no services found at this address")
+
+    meta = q(f"""
+        SELECT {name_col}
+        FROM prices s
+        {join}
+        WHERE upper(trim(s.address)) = ? AND upper(trim(s.city)) = ?
+    """, [addr_u, city_u])[0]
+
+    return {
+        "facility_key": facility_key, "address": addr_u, "city": city_u,
+        **meta, "services": rows,
+    }
 
 
 # ---- facility reviews ------------------------------------------------------

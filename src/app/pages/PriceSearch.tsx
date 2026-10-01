@@ -15,8 +15,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldCheck, ClipboardList, ExternalLink, Bookmark } from "lucide-react";
+import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldCheck, ClipboardList, ExternalLink, Bookmark, LocateFixed, PiggyBank, Building2 } from "lucide-react";
 import { ProviderMap, type MapPoint } from "../components/ProviderMap";
+import { GlossaryTerm } from "../components/GlossaryTerm";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
@@ -252,6 +253,26 @@ export function PriceSearch() {
   const [providers, setProviders] = useState<ProviderPrice[]>([]);
   const [city, setCity] = useState(params.get("city") || "");
   const [namedOnly, setNamedOnly] = useState(false);
+
+  // Distance. Opt-in only — the browser's own permission prompt is the only
+  // place a patient's location is asked for, never fetched silently. A
+  // denial or an unsupported browser both fall back to exactly the
+  // provider-count ordering this page already had.
+  const [nearLoc, setNearLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [locStatus, setLocStatus] = useState<"idle" | "loading" | "denied" | "unsupported">("idle");
+
+  function shareLocation() {
+    if (!navigator.geolocation) { setLocStatus("unsupported"); return; }
+    setLocStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setNearLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocStatus("idle");
+      },
+      () => setLocStatus("denied"),
+      { timeout: 10000 },
+    );
+  }
   const [trustedOnly, setTrustedOnly] = useState(false);
   const [comparableOnly, setComparableOnly] = useState(true);
   const [sort, setSort] = useState<ProviderSort>("recommended");
@@ -564,12 +585,13 @@ export function PriceSearch() {
       city: city || undefined, namedOnly, limit: 25,
       planId: planId || undefined,
       deductibleRemaining: dedLeft === "" ? undefined : Number(dedLeft),
+      nearLat: nearLoc?.lat, nearLng: nearLoc?.lng,
     })
       .then(r => { if (!cancelled) setFacilities(r); })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [selected, facility, city, namedOnly, planId, dedLeft]);
+  }, [selected, facility, city, namedOnly, planId, dedLeft, nearLoc]);
 
   // Layer 3 — individual providers at the chosen place.
   useEffect(() => {
@@ -628,6 +650,18 @@ export function PriceSearch() {
     return [...withPrice, ...withoutPrice];
   }, [facilities, facilitySort, plan]);
 
+  // Same headline number every card already shows, just framed as the gap
+  // between the cheapest and priciest real option instead of a bare range —
+  // concrete savings read as more persuasive than two numbers side by side.
+  // Needs a real second facility to mean anything; one location has no "or".
+  const savingsRange = useMemo(() => {
+    const headline = (f: Facility) => plan ? (f.your_cost ?? null) : f.median_price;
+    const priced = facilities.map(headline).filter((p): p is number => p != null);
+    if (priced.length < 2) return null;
+    const lo = Math.min(...priced), hi = Math.max(...priced);
+    return hi > lo ? { lo, hi, diff: hi - lo } : null;
+  }, [facilities, plan]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="relative bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -652,7 +686,7 @@ export function PriceSearch() {
           What will it cost, and where should I go?
         </h1>
         <p className="text-gray-600 mb-6">
-          Prices are negotiated rates published by insurers.
+          Prices are <GlossaryTerm term="negotiated rate">negotiated rates</GlossaryTerm> published by insurers.
         </p>
 
         {/* Same framed-card pattern as the Home hero search — a shadowed
@@ -805,8 +839,12 @@ export function PriceSearch() {
 
                 {plan && (
                   <p className="-mt-3 text-xs text-gray-500">
-                    {plan.deductible != null && <>{formatPrice(plan.deductible)} deductible</>}
-                    {plan.moop != null && <> · {formatPrice(plan.moop)} max out-of-pocket</>}
+                    {plan.deductible != null && (
+                      <>{formatPrice(plan.deductible)} <GlossaryTerm term="deductible" /></>
+                    )}
+                    {plan.moop != null && (
+                      <> · {formatPrice(plan.moop)} <GlossaryTerm term="out-of-pocket maximum">max out-of-pocket</GlossaryTerm></>
+                    )}
                     {isHSA(plan) && <> · HSA-eligible</>}
                   </p>
                 )}
@@ -814,7 +852,7 @@ export function PriceSearch() {
                 {plan && (
                   <div>
                     <Label htmlFor="ded" className="text-sm font-semibold text-gray-900 mb-2 block">
-                      Deductible left this year
+                      <GlossaryTerm term="deductible">Deductible</GlossaryTerm> left this year
                     </Label>
                     <Input
                       id="ded"
@@ -857,6 +895,31 @@ export function PriceSearch() {
 
                 {selected && !facility && (
                   <>
+                    <div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={shareLocation}
+                        disabled={locStatus === "loading"}
+                        className="w-full justify-start"
+                      >
+                        <LocateFixed className="h-4 w-4 mr-2" />
+                        {nearLoc
+                          ? "Sorted by distance"
+                          : locStatus === "loading" ? "Finding you…" : "Sort by distance from me"}
+                      </Button>
+                      {locStatus === "denied" && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Location wasn&rsquo;t shared — results stay sorted by provider count.
+                        </p>
+                      )}
+                      {locStatus === "unsupported" && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          This browser can&rsquo;t share your location.
+                        </p>
+                      )}
+                    </div>
                     <label className="flex items-start gap-2 cursor-pointer">
                       <Checkbox
                         checked={namedOnly}
@@ -1287,6 +1350,20 @@ export function PriceSearch() {
                   </Card>
                 )}
 
+                {!facility && savingsRange && (
+                  <div className="mb-4 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                    <PiggyBank className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-emerald-900">
+                      <strong>
+                        {plan ? "Your cost" : "The price"} ranges from{" "}
+                        {formatPrice(savingsRange.lo)} to {formatPrice(savingsRange.hi)}
+                      </strong>{" "}
+                      for the exact same {selected?.display_name} procedure depending on where you go —
+                      choosing a lower-priced location here could save you up to {formatPrice(savingsRange.diff)}.
+                    </p>
+                  </div>
+                )}
+
                 {/* Facilities arrived ordered by provider count. The price
                     spread between them is usually the whole reason to be
                     looking, so this gets the same sort control Layer 3 has
@@ -1400,6 +1477,12 @@ export function PriceSearch() {
                                   <Badge variant="outline" className="bg-white text-gray-600">
                                     {f.providers} {f.providers === 1 ? "provider" : "providers"}
                                   </Badge>
+                                  {f.distance_miles != null && (
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                      <LocateFixed className="h-3 w-3 mr-1" />
+                                      {f.distance_miles} mi
+                                    </Badge>
+                                  )}
                                   {f.rating && /^\d$/.test(f.rating) && (
                                     <Badge
                                       variant="outline"
@@ -1457,16 +1540,29 @@ export function PriceSearch() {
                                     a facility_id — most physician offices
                                     won't, so this stays hidden rather than
                                     opening an empty dialog. */}
-                                {f.facility_id && (
+                                <div className="mt-1.5 flex items-center gap-3">
+                                  {f.facility_id && (
+                                    <button
+                                      type="button"
+                                      onClick={e => { e.stopPropagation(); setQualityFacility(f); }}
+                                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                                    >
+                                      <ClipboardList className="h-3 w-3" />
+                                      Quality &amp; safety data
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={e => { e.stopPropagation(); setQualityFacility(f); }}
-                                    className="mt-1.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      navigate(`/facility/${f.facility_key}?address=${encodeURIComponent(f.address)}&city=${encodeURIComponent(f.city)}`);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
                                   >
-                                    <ClipboardList className="h-3 w-3" />
-                                    Quality &amp; safety data
+                                    <Building2 className="h-3 w-3" />
+                                    View full profile
                                   </button>
-                                )}
+                                </div>
                               </div>
                               {/* With a plan selected the headline becomes what
                                   the MEMBER pays; the negotiated rate drops to
@@ -1496,7 +1592,9 @@ export function PriceSearch() {
                                     <p className="text-lg font-semibold text-gray-900">
                                       {formatPrice(f.median_price)}
                                     </p>
-                                    <p className="text-xs text-gray-500">median</p>
+                                    <p className="text-xs text-gray-500">
+                                      <GlossaryTerm term="median" />
+                                    </p>
                                     <p className="text-xs text-gray-500">
                                       typical {formatPrice(f.low_price)}–{formatPrice(f.high_price)}
                                       <FullRangeInfo note={fullRangeNote(f.low_price_full, f.high_price_full)} />

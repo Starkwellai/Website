@@ -17,6 +17,7 @@ import { About } from "./pages/About";
 import { Utah } from "./pages/Utah";
 import { NotFound } from "./pages/NotFound";
 import { PriceSearch } from "./pages/PriceSearch";
+import { FacilityProfile } from "./pages/FacilityProfile";
 import { HospitalStays } from "./pages/HospitalStays";
 import { NewPatientGuide } from "./pages/NewPatientGuide";
 import { SavedItems } from "./pages/SavedItems";
@@ -124,6 +125,13 @@ export const router = createBrowserRouter([
     // (/prices/mri-knee/provo), and URLs are expensive to change once indexed.
     path: "/prices",
     element: <PriceSearch />,
+  },
+  {
+    // address/city come as query params, not just the facility_key path
+    // param — see getFacilityProfile()'s docstring for why the key alone
+    // can't be reversed back into a place.
+    path: "/facility/:facilityKey",
+    element: <FacilityProfile />,
   },
   {
     path: "/hospital-stays",

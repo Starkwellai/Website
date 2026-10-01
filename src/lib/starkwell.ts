@@ -151,6 +151,11 @@ export interface Facility {
   lat: number | null;
   lng: number | null;
   location_grade: LocationGrade | null;
+  /** Straight-line miles from the patient's location. Null unless both the
+   *  caller supplied near_lat/near_lng AND location_grade is "exact" — an
+   *  "approximate" row's coordinate is a geocoded area centroid, not a real
+   *  point, so it never gets a distance that would look precise and isn't. */
+  distance_miles: number | null;
 
   // Present only when a plan was supplied.
   /** The plan's own network rate here. Null when the network lists nothing. */
@@ -170,6 +175,10 @@ export async function getFacilities(
     planId?: string;
     /** How much deductible is left. Defaults to the plan's full deductible. */
     deductibleRemaining?: number;
+    /** Patient's location, for distance_miles. Sorts results by distance
+     *  unless a plan is also selected (your_cost takes priority then). */
+    nearLat?: number;
+    nearLng?: number;
   } = {},
 ): Promise<Facility[]> {
   const r = await get<{ results: Facility[] }>(
@@ -178,6 +187,7 @@ export async function getFacilities(
       city: opts.city, named_only: opts.namedOnly, limit: opts.limit ?? 25,
       plan_id: opts.planId,
       deductible_remaining: opts.deductibleRemaining,
+      near_lat: opts.nearLat, near_lng: opts.nearLng,
     },
   );
   return r.results;
@@ -350,6 +360,38 @@ export interface FacilityReviews {
 
 export async function getFacilityReviews(facilityKey: string): Promise<FacilityReviews> {
   return get<FacilityReviews>(`/facilities/${encodeURIComponent(facilityKey)}/reviews`);
+}
+
+export interface FacilityServiceRow {
+  service_key: string;
+  display_name: string;
+  category: string;
+  providers: number;
+  median_price: number;
+}
+
+export interface FacilityProfile {
+  facility_key: string;
+  address: string;
+  city: string;
+  facility_name: string | null;
+  rating: string | null;
+  facility_kind: string | null;
+  facility_id: string | null;
+  patient_star: number | null;
+  surveys: number | null;
+  services: FacilityServiceRow[];
+}
+
+/** Every priced procedure at ONE address — the reverse of getFacilities(),
+ *  which goes service -> facilities. address/city must be the exact values
+ *  a Facility object already carried (they're what facility_key was derived
+ *  from); the backend checks that pairing and 400s on a mismatch rather than
+ *  silently showing the wrong place's prices. */
+export async function getFacilityProfile(
+  facilityKey: string, address: string, city: string,
+): Promise<FacilityProfile> {
+  return get<FacilityProfile>(`/facilities/${encodeURIComponent(facilityKey)}/services`, { address, city });
 }
 
 /** Posts a Starkwell-authored review. Open to any visitor — there's no
