@@ -7,9 +7,13 @@ the API, which opens DuckDB.
 
 In-process state is safe only because the API runs a single uvicorn worker
 (see the __main__ block in serving_api.py); it resets on every restart.
+
+Thread-safe: the endpoints that use it are plain `def` handlers, which FastAPI
+runs on a threadpool, so check() is called concurrently.
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import Optional
 
@@ -24,16 +28,22 @@ class RateLimiter:
         self.window = window
         self.max_keys = max_keys
         self._hits: dict[str, list[float]] = {}
+        # Without this, _prune iterating the dict while another thread inserts
+        # raises "dictionary changed size during iteration" (a 500 instead of a
+        # 429, in exactly the flood it exists for), and two simultaneous
+        # requests from one key can both read a count below the limit.
+        self._lock = threading.Lock()
 
     def check(self, key: str, now: Optional[float] = None) -> None:
         now = time.time() if now is None else now
-        if len(self._hits) > self.max_keys:
-            self._prune(now)
-        hits = [t for t in self._hits.get(key, []) if now - t < self.window]
-        if len(hits) >= self.limit:
-            raise RateLimited
-        hits.append(now)
-        self._hits[key] = hits
+        with self._lock:
+            if len(self._hits) > self.max_keys:
+                self._prune(now)
+            hits = [t for t in self._hits.get(key, []) if now - t < self.window]
+            if len(hits) >= self.limit:
+                raise RateLimited
+            hits.append(now)
+            self._hits[key] = hits
 
     def _prune(self, now: float) -> None:
         """Drop keys whose newest hit has aged out. If a flood of distinct keys
@@ -42,7 +52,7 @@ class RateLimiter:
         leaves headroom so the next prune isn't triggered by the very next
         call (which would make every request during a flood walk the dict).
         Evicting live keys resets their counts, which is the cheaper failure
-        than unbounded growth."""
+        than unbounded growth. Caller holds self._lock."""
         for stale in [k for k, v in self._hits.items() if not v or now - v[-1] >= self.window]:
             del self._hits[stale]
         target = int(self.max_keys * 0.75)
@@ -52,4 +62,24 @@ class RateLimiter:
                 del self._hits[k]
 
     def __len__(self) -> int:
-        return len(self._hits)
+        with self._lock:
+            return len(self._hits)
+
+
+def resolve_client_ip(peer: Optional[str], forwarded_for: Optional[str],
+                      behind_proxy: bool) -> str:
+    """The address rate limits are keyed on.
+
+    Directly exposed (today): the TCP peer. Behind a reverse proxy that
+    terminates TLS (nginx, Caddy, a platform load balancer) the peer is the
+    proxy for every visitor, so every limit would collapse into one site-wide
+    bucket and one person could lock out all providers. With behind_proxy set,
+    use the LAST X-Forwarded-For entry: that is the one the single trusted
+    proxy appended, whereas earlier entries are whatever the client claimed.
+    Off by default, because honoring that header from a client that is NOT
+    behind a proxy lets anyone pick their own rate-limit key."""
+    if behind_proxy and forwarded_for:
+        last = forwarded_for.split(",")[-1].strip()
+        if last:
+            return last
+    return peer or "unknown"

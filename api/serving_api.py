@@ -67,7 +67,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from drug_names import friendly_dosage_form
-from ratelimit import RateLimited, RateLimiter
+from ratelimit import RateLimited, RateLimiter, resolve_client_ip
 
 # Month directories mean this path never changes when a new month is published;
 # build_serving.py rewrites this file from whichever month is _COMPLETE.
@@ -1762,7 +1762,7 @@ def services(
     loose_tokens = _loose_match_tokens(q_, tokens)
     if not loose_tokens:
         _log_search_activity(q_, 0)
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = _client_ip(request)
         return {"query": q_, "results": [], "search_token": _issue_zero_result_token(client_ip)}
     or_where = list(base_where)
     or_params = list(base_params)
@@ -1792,7 +1792,7 @@ def services(
     final_rows = _services_rows(or_where, or_params + relevance_params, limit, order_by=order_by)
     _log_search_activity(q_, len(final_rows))
     if not final_rows:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = _client_ip(request)
         return {"query": q_, "results": [], "search_token": _issue_zero_result_token(client_ip)}
     return {"query": q_, "results": final_rows}
 
@@ -1884,14 +1884,34 @@ Catalog (service_key | display name | category):
 # one process ever touching it. Not durable across a restart, and wouldn't
 # be safe if this ever ran with multiple workers — fine for a single $6/mo
 # container, revisit if that changes.
+# Set when a TLS-terminating reverse proxy sits in front of uvicorn (the usual
+# shape once the site has a domain and HTTPS). Without it every visitor
+# arrives from the proxy's address and all the limits below collapse into one
+# site-wide bucket. Off by default: honoring X-Forwarded-For from a client that
+# isn't behind a proxy lets it pick its own rate-limit key.
+BEHIND_PROXY = os.environ.get("STARKWELL_BEHIND_PROXY", "") == "1"
+
+
+def _client_ip(request: Request) -> str:
+    return resolve_client_ip(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+        BEHIND_PROXY,
+    )
+
+
+def _enforce(limiter: RateLimiter, ip: str, message: str) -> None:
+    try:
+        limiter.check(ip)
+    except RateLimited:
+        raise HTTPException(429, message)
+
+
 _ai_limiter = RateLimiter(limit=5, window=60.0)
 
 
 def _check_rate_limit(ip: str) -> None:
-    try:
-        _ai_limiter.check(ip)
-    except RateLimited:
-        raise HTTPException(429, "Too many AI search requests — try again in a minute.")
+    _enforce(_ai_limiter, ip, "Too many AI search requests — try again in a minute.")
 
 
 # Gates /api/services/ai-search behind proof that a real /api/services call
@@ -1947,7 +1967,7 @@ def ai_search(body: AISearchBody, request: Request):
     if not ANTHROPIC_API_KEY:
         return {"query": body.query, "enabled": False, "matched_keys": [], "results": [], "error": None}
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     _check_rate_limit(client_ip)
     if not _consume_zero_result_token(body.search_token, client_ip):
         raise HTTPException(403, "This endpoint requires a recent search that returned no results.")
@@ -2440,10 +2460,7 @@ _review_limiter = RateLimiter(limit=5, window=3600.0)
 
 
 def _check_review_rate_limit(ip: str) -> None:
-    try:
-        _review_limiter.check(ip)
-    except RateLimited:
-        raise HTTPException(429, "Too many reviews submitted recently — try again in a bit.")
+    _enforce(_review_limiter, ip, "Too many reviews submitted recently — try again in a bit.")
 
 
 _valid_facility_keys: Optional[frozenset[str]] = None
@@ -2462,18 +2479,35 @@ def _load_facility_keys() -> frozenset[str]:
     Warmed by a background thread once db() finishes, NOT inside db(): the
     canary health check allows 240s and a cold start already takes 215-235s,
     so startup work here would risk failing deploys. If a request arrives
-    before the warm-up is done it builds the set itself; the lock keeps the
-    two from doing it twice."""
+    before the warm-up is done it builds the set itself; the build lock keeps
+    the two from doing it twice.
+
+    Runs on its own DuckDB cursor instead of through q(): q() serializes on
+    the global _lock, so a multi-second scan there would queue every other
+    request (including health polls) behind it. A separate cursor reads the
+    same table concurrently. The elapsed time is logged so the real
+    droplet's cost shows up in `docker logs` rather than being guessed at."""
     global _valid_facility_keys
     if _valid_facility_keys is None:
         with _facility_keys_build_lock:
             if _valid_facility_keys is None:
-                rows = q("""
-                    SELECT DISTINCT upper(trim(address)) AS address, upper(trim(city)) AS city
-                    FROM prices WHERE address IS NOT NULL AND trim(address) <> ''
-                """)
-                _valid_facility_keys = frozenset(
-                    _facility_key(r["address"], r["city"]) for r in rows)
+                started = time.time()
+                # Lock only long enough to get the cursor: db() assigns _con
+                # before it has built the tables, so calling it unlocked could
+                # hand back a half-built connection while another request is
+                # still mid-build. Taking _lock waits for any build to finish.
+                with _lock:
+                    cur = db().cursor()
+                try:
+                    rows = cur.execute("""
+                        SELECT DISTINCT upper(trim(address)), upper(trim(city))
+                        FROM prices WHERE address IS NOT NULL AND trim(address) <> ''
+                    """).fetchall()
+                finally:
+                    cur.close()
+                _valid_facility_keys = frozenset(_facility_key(a, c) for a, c in rows)
+                print(f"facility keys: {len(_valid_facility_keys)} locations hashed "
+                      f"in {time.time() - started:.1f}s", flush=True)
     return _valid_facility_keys
 
 
@@ -2488,7 +2522,7 @@ def submit_review(facility_key: str, body: ReviewBody, request: Request):
     as the only real defense against spam at this site's current scale. The
     location must be a real one, though: otherwise a script can write rows
     under arbitrary keys that no page will ever read."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     _check_review_rate_limit(client_ip)
     if not _is_known_facility_key(facility_key):
         raise HTTPException(404, "Unknown location.")
@@ -2678,10 +2712,7 @@ _provider_auth_limiter = RateLimiter(limit=8, window=300.0)
 
 
 def _check_provider_auth_rate_limit(ip: str) -> None:
-    try:
-        _provider_auth_limiter.check(ip)
-    except RateLimited:
-        raise HTTPException(429, "Too many attempts — try again in a few minutes.")
+    _enforce(_provider_auth_limiter, ip, "Too many attempts — try again in a few minutes.")
 
 
 class ProviderSignupBody(BaseModel):
@@ -2707,7 +2738,7 @@ class ProviderLoginBody(BaseModel):
 
 @app.post("/api/provider-signup")
 def provider_signup(body: ProviderSignupBody, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     _check_provider_auth_rate_limit(client_ip)
     email = body.email.strip().lower()
     if "@" not in email or "." not in email.split("@")[-1]:
@@ -2737,7 +2768,7 @@ def provider_signup(body: ProviderSignupBody, request: Request):
 
 @app.post("/api/provider-login")
 def provider_login(body: ProviderLoginBody, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     _check_provider_auth_rate_limit(client_ip)
     email = body.email.strip().lower()
     con = _provider_db()
@@ -2949,10 +2980,7 @@ _appointment_limiter = RateLimiter(limit=5, window=3600.0)
 
 
 def _check_appointment_rate_limit(ip: str) -> None:
-    try:
-        _appointment_limiter.check(ip)
-    except RateLimited:
-        raise HTTPException(429, "Too many requests sent recently — try again in a bit.")
+    _enforce(_appointment_limiter, ip, "Too many requests sent recently — try again in a bit.")
 
 
 @app.post("/api/facilities/{facility_key}/request-appointment")
@@ -2960,7 +2988,7 @@ def request_appointment(facility_key: str, body: AppointmentRequestBody, request
     """Public, no auth. Broadcasts to every provider who has claimed this
     exact location (almost always exactly one) rather than making the
     patient pick between duplicate claims."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     _check_appointment_rate_limit(client_ip)
     con = _provider_db()
     try:

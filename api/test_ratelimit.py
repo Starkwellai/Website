@@ -3,7 +3,10 @@ logic never exercised. Pure, no server:
 
     python api/test_ratelimit.py      (or: pytest api/test_ratelimit.py)
 """
-from ratelimit import RateLimited, RateLimiter
+import sys
+import threading
+
+from ratelimit import RateLimited, RateLimiter, resolve_client_ip
 
 
 def _blocked(rl, key, now):
@@ -60,6 +63,82 @@ def test_flood_of_live_keys_is_capped_and_amortized():
     assert len(rl) <= 101
     # evicts the least-recently-seen, so the newest keys survive
     assert "ip999" in rl._hits and "ip0" not in rl._hits
+
+
+def _hammer(rl, worker, n_threads):
+    """Run worker(i) on n_threads threads with a tiny switch interval so a
+    missing lock actually shows up; return any exceptions the workers raised."""
+    errors = []
+    start = threading.Barrier(n_threads)
+
+    def run(i):
+        try:
+            start.wait()
+            worker(i)
+        except Exception as e:  # noqa: BLE001 - the point is to catch anything
+            errors.append(repr(e))
+
+    old = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        threads = [threading.Thread(target=run, args=(i,)) for i in range(n_threads)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+    finally:
+        sys.setswitchinterval(old)
+    return errors
+
+
+def test_concurrent_flood_never_raises():
+    # Tiny cap so pruning (which iterates and deletes) runs constantly while
+    # other threads insert. Without the lock this raises "dictionary changed
+    # size during iteration" -- a 500 instead of a 429.
+    rl = RateLimiter(limit=5, window=3600, max_keys=40)
+
+    def worker(i):
+        for n in range(1500):
+            try:
+                rl.check(f"ip-{i}-{n}", now=float(n))
+            except RateLimited:
+                pass
+
+    assert _hammer(rl, worker, n_threads=8) == []
+
+
+def test_concurrent_requests_cannot_overshoot_the_limit():
+    rl = RateLimiter(limit=5, window=3600)
+    allowed = []
+
+    def worker(i):
+        for _ in range(50):
+            try:
+                rl.check("same-ip", now=1.0)
+                allowed.append(1)
+            except RateLimited:
+                pass
+
+    assert _hammer(rl, worker, n_threads=12) == []
+    assert len(allowed) == 5
+
+
+def test_client_ip_direct_connection_ignores_forwarded_header():
+    # Not behind a proxy: a client-supplied X-Forwarded-For must NOT choose
+    # its own rate-limit key.
+    assert resolve_client_ip("203.0.113.9", "1.2.3.4", behind_proxy=False) == "203.0.113.9"
+
+
+def test_client_ip_behind_proxy_uses_the_proxy_appended_entry():
+    # The proxy appends the real peer; anything before it was client-claimed.
+    assert resolve_client_ip("10.0.0.2", "6.6.6.6, 198.51.100.7", behind_proxy=True) == "198.51.100.7"
+    assert resolve_client_ip("10.0.0.2", "198.51.100.7", behind_proxy=True) == "198.51.100.7"
+
+
+def test_client_ip_falls_back_when_header_missing_or_blank():
+    assert resolve_client_ip("10.0.0.2", None, behind_proxy=True) == "10.0.0.2"
+    assert resolve_client_ip("10.0.0.2", " , ", behind_proxy=True) == "10.0.0.2"
+    assert resolve_client_ip(None, None, behind_proxy=False) == "unknown"
 
 
 if __name__ == "__main__":

@@ -206,4 +206,12 @@ rebuild.
   [Caddy](https://caddyserver.com/) in front of the container gets free
   auto-renewing HTTPS with about 5 lines of config. Not needed for an IP link
   sent to a handful of people — worth doing once this is more than a demo.
+  **When you add a proxy, also set `STARKWELL_BEHIND_PROXY=1`** on the API
+  container (add it to `/root/starkwell.env`). Without it every visitor
+  arrives from the proxy's address, so the per-visitor limits (5 reviews/hour,
+  5 appointment requests/hour, 8 provider logins per 5 minutes) become one
+  shared bucket for the whole site and a single person can lock everyone out.
+  Leave it unset when there is no proxy: with it on, the API trusts the proxy's
+  `X-Forwarded-For`, which a client talking to it directly could forge. The
+  proxy must append the visitor's address (Caddy and nginx both do by default).
 - Everything above stays at **$6/month total** with no domain.
