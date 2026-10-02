@@ -54,6 +54,7 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
@@ -63,6 +64,8 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from drug_names import friendly_dosage_form
 from pydantic import BaseModel, Field
 
 # Month directories mean this path never changes when a new month is published;
@@ -607,6 +610,17 @@ def db() -> duckdb.DuckDBPyConnection:
             _con.execute(
                 f"CREATE VIEW cash AS "
                 f"SELECT * FROM read_parquet('{CASH.as_posix()}')")
+        # Tables, not read_csv_auto() per request: that re-sniffed and
+        # re-parsed both files on every drug search (the Cost Plus one twice).
+        # Tiny (8K and 32K rows) and static between deploys, same reasoning
+        # as `prices` above. The endpoints still gate on the files existing,
+        # which is exactly when these tables do.
+        if DRUG_PRICES.exists():
+            _con.execute(f"CREATE TABLE costplus_drugs AS "
+                         f"SELECT * FROM read_csv_auto('{DRUG_PRICES.as_posix()}')")
+        if NADAC_PRICES.exists():
+            _con.execute(f"CREATE TABLE nadac_drugs AS "
+                         f"SELECT * FROM read_csv_auto('{NADAC_PRICES.as_posix()}')")
     return _con
 
 
@@ -1871,13 +1885,26 @@ Catalog (service_key | display name | category):
 _rate_state: dict[str, list[float]] = {}
 
 
-def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
+def _rate_limit(state: dict[str, list[float]], ip: str, limit: int,
+                window: float, message: str) -> None:
+    """Shared by every per-IP limiter in this file (AI search, reviews,
+    appointment requests, provider auth) — they were four copies of this.
+    Also prunes: a bare per-IP dict only ever trimmed an IP's list when that
+    same IP came back, so entries for one-off visitors lived forever."""
     now = time.time()
-    hits = [t for t in _rate_state.get(ip, []) if now - t < window]
+    if len(state) > 2000:
+        for stale in [k for k, v in state.items() if not v or now - v[-1] >= window]:
+            del state[stale]
+    hits = [t for t in state.get(ip, []) if now - t < window]
     if len(hits) >= limit:
-        raise HTTPException(429, "Too many AI search requests — try again in a minute.")
+        raise HTTPException(429, message)
     hits.append(now)
-    _rate_state[ip] = hits
+    state[ip] = hits
+
+
+def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
+    _rate_limit(_rate_state, ip, limit, window,
+                "Too many AI search requests — try again in a minute.")
 
 
 # Gates /api/services/ai-search behind proof that a real /api/services call
@@ -2322,14 +2349,28 @@ def facility_services(facility_key: str, address: str, city: str):
     addr_u, city_u = address.upper().strip(), city.upper().strip()
     if _facility_key(addr_u, city_u) != facility_key:
         raise HTTPException(400, "facility_key does not match address/city")
+    payload = _facility_services_payload(addr_u, city_u)
+    if payload is None:
+        raise HTTPException(404, "no services found at this address")
+    return {"facility_key": facility_key, **payload}
 
+
+@lru_cache(maxsize=512)
+def _facility_services_payload(addr_u: str, city_u: str) -> Optional[dict]:
+    """One scan of `prices` (the facility's name/rating columns ride along on
+    each service row, since the CMS join is keyed on the address and so is
+    identical across them) and cached — the data is static between deploys,
+    this endpoint is unauthenticated and linked from every result card, and
+    an uncached call was two full-table address scans on a single-vCPU box.
+    A missing location is cached as None so repeated misses don't rescan."""
     have_dim = FACILITIES.exists()
-    name_col = "NULL AS facility_name, NULL AS rating, NULL AS facility_kind, NULL AS facility_id, NULL AS patient_star, NULL AS surveys"
+    meta_cols = ("NULL AS facility_name, NULL AS rating, NULL AS facility_kind, "
+                 "NULL AS facility_id, NULL AS patient_star, NULL AS surveys")
     join = ""
     if have_dim:
-        name_col = ("any_value(f.facility_name) AS facility_name, any_value(f.overall_rating) AS rating, "
-                    "any_value(f.facility_kind) AS facility_kind, any_value(f.facility_id) AS facility_id, "
-                    "any_value(f.patient_star) AS patient_star, any_value(f.surveys) AS surveys")
+        meta_cols = ("any_value(f.facility_name) AS facility_name, any_value(f.overall_rating) AS rating, "
+                     "any_value(f.facility_kind) AS facility_kind, any_value(f.facility_id) AS facility_id, "
+                     "any_value(f.patient_star) AS patient_star, any_value(f.surveys) AS surveys")
         join = f"""
           LEFT JOIN (
             SELECT {norm_addr('d.address')} AS naddr, upper(trim(d.city)) AS ncity,
@@ -2340,7 +2381,8 @@ def facility_services(facility_key: str, address: str, city: str):
 
     rows = q(f"""
         SELECT service_key, any_value(display_name) AS display_name, any_value(category) AS category,
-               count(DISTINCT npi) AS providers, median(median_rate) AS median_price
+               count(DISTINCT npi) AS providers, median(median_rate) AS median_price,
+               {meta_cols}
         FROM prices s
         {join}
         WHERE upper(trim(s.address)) = ? AND upper(trim(s.city)) = ? AND s.is_primary
@@ -2348,19 +2390,13 @@ def facility_services(facility_key: str, address: str, city: str):
         ORDER BY providers DESC
     """, [addr_u, city_u])
     if not rows:
-        raise HTTPException(404, "no services found at this address")
-
-    meta = q(f"""
-        SELECT {name_col}
-        FROM prices s
-        {join}
-        WHERE upper(trim(s.address)) = ? AND upper(trim(s.city)) = ?
-    """, [addr_u, city_u])[0]
-
-    return {
-        "facility_key": facility_key, "address": addr_u, "city": city_u,
-        **meta, "services": rows,
-    }
+        return None
+    meta_keys = ("facility_name", "rating", "facility_kind", "facility_id", "patient_star", "surveys")
+    meta = {k: rows[0][k] for k in meta_keys}
+    for r in rows:
+        for k in meta_keys:
+            del r[k]
+    return {"address": addr_u, "city": city_u, **meta, "services": rows}
 
 
 # ---- facility reviews ------------------------------------------------------
@@ -2415,21 +2451,39 @@ _review_rate_state: dict[str, list[float]] = {}
 
 
 def _check_review_rate_limit(ip: str) -> None:
-    now = time.time()
-    hits = [t for t in _review_rate_state.get(ip, []) if now - t < 3600.0]
-    if len(hits) >= 5:
-        raise HTTPException(429, "Too many reviews submitted recently — try again in a bit.")
-    hits.append(now)
-    _review_rate_state[ip] = hits
+    _rate_limit(_review_rate_state, ip, 5, 3600.0,
+                "Too many reviews submitted recently — try again in a bit.")
+
+
+_valid_facility_keys: Optional[frozenset[str]] = None
+
+
+def _is_known_facility_key(facility_key: str) -> bool:
+    """facility_key is a hash of (address, city), so it can't be checked by
+    looking it up — instead hash every real location once and keep the set.
+    Built lazily on first review (not at startup, which already pays for the
+    prices table) and static after that, same as the data it's built from."""
+    global _valid_facility_keys
+    if _valid_facility_keys is None:
+        rows = q("""
+            SELECT DISTINCT upper(trim(address)) AS address, upper(trim(city)) AS city
+            FROM prices WHERE address IS NOT NULL AND trim(address) <> ''
+        """)
+        _valid_facility_keys = frozenset(_facility_key(r["address"], r["city"]) for r in rows)
+    return facility_key in _valid_facility_keys
 
 
 @app.post("/api/facilities/{facility_key}/reviews")
 def submit_review(facility_key: str, body: ReviewBody, request: Request):
     """Anyone can post — there's no account system anywhere on this site
     (see UserContext.tsx) — so this is deliberately open, with a rate limit
-    as the only real defense against spam at this site's current scale."""
+    as the only real defense against spam at this site's current scale. The
+    location must be a real one, though: otherwise a script can write rows
+    under arbitrary keys that no page will ever read."""
     client_ip = request.client.host if request.client else "unknown"
     _check_review_rate_limit(client_ip)
+    if not _is_known_facility_key(facility_key):
+        raise HTTPException(404, "Unknown location.")
     con = _reviews_db()
     try:
         con.execute(
@@ -2616,12 +2670,8 @@ _provider_auth_rate_state: dict[str, list[float]] = {}
 
 
 def _check_provider_auth_rate_limit(ip: str, limit: int = 8, window: float = 300.0) -> None:
-    now = time.time()
-    hits = [t for t in _provider_auth_rate_state.get(ip, []) if now - t < window]
-    if len(hits) >= limit:
-        raise HTTPException(429, "Too many attempts — try again in a few minutes.")
-    hits.append(now)
-    _provider_auth_rate_state[ip] = hits
+    _rate_limit(_provider_auth_rate_state, ip, limit, window,
+                "Too many attempts — try again in a few minutes.")
 
 
 class ProviderSignupBody(BaseModel):
@@ -2889,12 +2939,8 @@ _appointment_rate_state: dict[str, list[float]] = {}
 
 
 def _check_appointment_rate_limit(ip: str) -> None:
-    now = time.time()
-    hits = [t for t in _appointment_rate_state.get(ip, []) if now - t < 3600.0]
-    if len(hits) >= 5:
-        raise HTTPException(429, "Too many requests sent recently — try again in a bit.")
-    hits.append(now)
-    _appointment_rate_state[ip] = hits
+    _rate_limit(_appointment_rate_state, ip, 5, 3600.0,
+                "Too many requests sent recently — try again in a bit.")
 
 
 @app.post("/api/facilities/{facility_key}/request-appointment")
@@ -3158,62 +3204,6 @@ def hospital_stay_detail(drg_code: int):
     }
 
 
-def _friendly_dosage_form(raw: str, drug_name: str, include_name: bool = True) -> str:
-    """Cost Plus Drugs' own dosage_form slugs ("abacavir-sulfate-300mg-
-    tablet-ziagen") are real and specific, just URL-formatted. This is pure
-    reformatting of their exact text — never a guess at strength or form.
-
-    The slug's leading drug-name portion is stripped and, when include_name
-    (the drug_name isn't shown separately by the caller), replaced with the
-    real drug_name as-is (checked: affects 716 of 8257 rows, mostly combo
-    drugs like "Lisinopril / HCTZ") rather than title-cased from the slug —
-    for a multi-word combo name the slug runs the words together with no
-    separator ("lisinoprilhctz-10mg-..."), which title-casing alone can't
-    recover ("Lisinoprilhctz"). Only the strength/form suffix is parsed from
-    the slug itself either way.
-
-    An underscore between two digits is their decimal point ("lisinopril-
-    2_5mg-tablet" = 2.5mg) and must be restored before the generic
-    underscore->space pass below, which is for combo-drug strength
-    separators ("...600mg_300mg-tablet") where it really does mean a space."""
-    # Walks s counting only alphanumerics so the comparison is separator-
-    # insensitive on BOTH sides — needed because the slug sometimes keeps a
-    # dash between a combo drug's words ("amlodipine-atorvastatin-10-...")
-    # and sometimes doesn't ("lisinoprilhctz-10mg-..."); a plain
-    # s.startswith(name_slug) only caught the second form and silently left
-    # the first one's name doubled when include_name=True later prepended
-    # the real name on top of the never-stripped slug.
-    name_slug = re.sub(r"[^a-z0-9]", "", drug_name.lower())
-    s = raw
-    if name_slug:
-        norm_count, cut = 0, 0
-        for i, ch in enumerate(s):
-            if ch.isalnum():
-                norm_count += 1
-            if norm_count == len(name_slug):
-                cut = i + 1
-                break
-        if cut and re.sub(r"[^a-z0-9]", "", s[:cut].lower()) == name_slug:
-            s = s[cut:].lstrip("-_")
-    s = s.replace("-", " ")
-    s = re.sub(r"(\d)_(\d)", r"\1.\2", s)
-    s = s.replace("_", " ")
-    s = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", s)
-    s = s.title()
-    for unit in ("Mg", "Ml", "Mcg", "Gm", "Iu"):
-        s = re.sub(rf"\b{unit}\b", unit.upper(), s)
-    # A combo drug's two strengths share one trailing unit in the slug
-    # ("amlodipine-atorvastatin-10-10mg-..." -> "10 10 MG") — genuinely
-    # ambiguous as two bare numbers in a row. "10/10 MG" is how a combo
-    # strength is conventionally written, so insert the slash the slug
-    # itself doesn't have. Checked: doesn't touch combo drugs whose slug
-    # already pairs each number with its own unit ("...10mg_12_5mg..." ->
-    # "10 MG 12.5 MG"), which isn't ambiguous and shouldn't be touched.
-    s = re.sub(r"(?<!\d)(\d+(?:\.\d+)?) (\d+(?:\.\d+)?) (MG|ML|MCG|GM|IU)\b", r"\1/\2 \3", s)
-    s = s.strip()
-    return f"{drug_name} {s}".strip() if include_name else s
-
-
 @app.get("/api/drugs")
 def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200),
           limit: int = Query(20, ge=1, le=100)):
@@ -3251,20 +3241,20 @@ def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200),
     # real variant set.
     costplus = q(f"""
         WITH matched AS (
-            SELECT DISTINCT drug_name FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
+            SELECT DISTINCT drug_name FROM costplus_drugs
             {where}
             ORDER BY drug_name
             LIMIT {int(limit)}
         )
         SELECT c.drug_name, c.dosage_form, round(min(c.price), 2) AS min_price,
                round(max(c.price), 2) AS max_price, any_value(c.url) AS url
-        FROM read_csv_auto('{DRUG_PRICES.as_posix()}') c
+        FROM costplus_drugs c
         JOIN matched m ON m.drug_name = c.drug_name
         GROUP BY c.drug_name, c.dosage_form
         ORDER BY c.drug_name
     """, params)
     for r in costplus:
-        r["dosage_form"] = _friendly_dosage_form(r["dosage_form"], r["drug_name"], include_name=False)
+        r["dosage_form"] = friendly_dosage_form(r["dosage_form"], r["drug_name"], include_name=False)
 
     nadac: list[dict] = []
     if NADAC_PRICES.exists():
@@ -3276,7 +3266,7 @@ def drugs(q_: Optional[str] = Query(None, alias="q", max_length=200),
         nadac = q(f"""
             SELECT ndc_description, round(median(nadac_per_unit), 4) AS nadac_per_unit,
                    any_value(pricing_unit) AS unit, any_value(otc) AS otc
-            FROM read_csv_auto('{NADAC_PRICES.as_posix()}')
+            FROM nadac_drugs
             {where_n}
             GROUP BY ndc_description
             ORDER BY ndc_description
@@ -3296,7 +3286,7 @@ def drug_detail(name: str = Query(..., max_length=300)):
         raise HTTPException(503, "drug price data not available")
     rows = q(f"""
         SELECT dosage_form, round(min(price), 2) AS price, any_value(url) AS url
-        FROM read_csv_auto('{DRUG_PRICES.as_posix()}')
+        FROM costplus_drugs
         WHERE drug_name = ?
         GROUP BY dosage_form
         ORDER BY price ASC
@@ -3304,7 +3294,7 @@ def drug_detail(name: str = Query(..., max_length=300)):
     if not rows:
         raise HTTPException(404, f"no data for {name}")
     for r in rows:
-        r["friendly_dosage_form"] = _friendly_dosage_form(r["dosage_form"], name)
+        r["friendly_dosage_form"] = friendly_dosage_form(r["dosage_form"], name)
     return {
         "drug_name": name,
         "source": "costplusdrugs.com",

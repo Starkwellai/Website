@@ -117,6 +117,9 @@ function FullRangeInfo({ note }: { note: string | null }) {
           role="button"
           tabIndex={0}
           onClick={e => e.stopPropagation()}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+          }}
           aria-label="Full price range, including outlier rates"
           className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
         >
@@ -145,6 +148,9 @@ function TermInfo({ text }: { text: string }) {
           role="button"
           tabIndex={0}
           onClick={e => e.stopPropagation()}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+          }}
           aria-label="What this means"
           className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
         >
@@ -260,6 +266,12 @@ export function PriceSearch() {
   // provider-count ordering this page already had.
   const [nearLoc, setNearLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [locStatus, setLocStatus] = useState<"idle" | "loading" | "denied" | "unsupported">("idle");
+  // Browsers only expose geolocation on secure origins (https or localhost).
+  // On a plain-http page the request is refused before any prompt, which this
+  // page would then report as "Location wasn't shared" — blaming a user who
+  // was never asked. Hide the control instead; it appears on its own once the
+  // site is served over https.
+  const canLocate = typeof window !== "undefined" && window.isSecureContext && "geolocation" in navigator;
 
   function shareLocation() {
     if (!navigator.geolocation) { setLocStatus("unsupported"); return; }
@@ -895,7 +907,7 @@ export function PriceSearch() {
 
                 {selected && !facility && (
                   <>
-                    <div>
+                    {canLocate && <div>
                       <Button
                         type="button"
                         variant="outline"
@@ -919,7 +931,7 @@ export function PriceSearch() {
                           This browser can&rsquo;t share your location.
                         </p>
                       )}
-                    </div>
+                    </div>}
                     <label className="flex items-start gap-2 cursor-pointer">
                       <Checkbox
                         checked={namedOnly}

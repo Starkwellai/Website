@@ -34,6 +34,12 @@ export function GlossaryTerm({ term, children }: { term: GlossaryKey; children?:
           role="button"
           tabIndex={0}
           onClick={e => e.stopPropagation()}
+          // A span with role="button" gets click from the mouse but not
+          // from Enter/Space the way a real <button> does — without this a
+          // keyboard user can focus the term and never open the definition.
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+          }}
           className="underline decoration-dotted decoration-gray-400 underline-offset-2 cursor-pointer hover:decoration-gray-600"
         >
           {children ?? term}

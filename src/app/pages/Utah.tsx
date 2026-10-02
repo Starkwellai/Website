@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
-  searchServices, getFacilities, facilityLabel, formatPrice,
+  searchServices, searchDrugsRaw, getFacilities, facilityLabel, formatPrice,
   ORTHOPEDICS_KEYS, ELECTIVE_SURGERY_KEYS,
-  type Facility,
+  type Facility, type DrugSearchResponse,
 } from "../../lib/starkwell";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -95,27 +95,6 @@ interface MedicaidFeeRate {
   rate: number;
 }
 
-interface CostPlusDrug {
-  drug_name: string;
-  dosage_form: string;
-  min_price: number;
-  max_price: number;
-  url: string;
-}
-
-interface NadacDrug {
-  ndc_description: string;
-  nadac_per_unit: number;
-  unit: string;
-  otc: string;
-}
-
-interface DrugResults {
-  query: string;
-  costplus: CostPlusDrug[];
-  nadac: NadacDrug[];
-}
-
 interface RateDetail {
   billing_code: string;
   description: string;
@@ -188,7 +167,7 @@ export function Utah() {
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const [detail, setDetail] = useState<RateDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [drugResults, setDrugResults] = useState<DrugResults | null>(null);
+  const [drugResults, setDrugResults] = useState<DrugSearchResponse | null>(null);
 
   const handleSearch = useCallback(async () => {
     const q = query.trim();
@@ -198,9 +177,7 @@ export function Utah() {
       setHasSearched(true);
       setDrugResults(null);
       try {
-        const res = await fetch(`/api/drugs?q=${encodeURIComponent(q)}&limit=20`);
-        if (!res.ok) throw new Error(await res.text());
-        setDrugResults(await res.json());
+        setDrugResults(await searchDrugsRaw(q, 20));
       } catch {
         setDrugResults({ query: q, costplus: [], nadac: [] });
       } finally {
