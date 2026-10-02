@@ -118,7 +118,7 @@ function FullRangeInfo({ note }: { note: string | null }) {
           tabIndex={0}
           onClick={e => e.stopPropagation()}
           onKeyDown={e => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); e.currentTarget.click(); }
           }}
           aria-label="Full price range, including outlier rates"
           className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
@@ -149,7 +149,7 @@ function TermInfo({ text }: { text: string }) {
           tabIndex={0}
           onClick={e => e.stopPropagation()}
           onKeyDown={e => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); e.currentTarget.click(); }
           }}
           aria-label="What this means"
           className="inline-flex items-center justify-center ml-1 p-2 align-middle text-gray-500 hover:text-gray-600 cursor-pointer"
@@ -262,10 +262,10 @@ export function PriceSearch() {
 
   // Distance. Opt-in only — the browser's own permission prompt is the only
   // place a patient's location is asked for, never fetched silently. A
-  // denial or an unsupported browser both fall back to exactly the
-  // provider-count ordering this page already had.
+  // denial falls back to exactly the provider-count ordering this page
+  // already had.
   const [nearLoc, setNearLoc] = useState<{ lat: number; lng: number } | null>(null);
-  const [locStatus, setLocStatus] = useState<"idle" | "loading" | "denied" | "unsupported">("idle");
+  const [locStatus, setLocStatus] = useState<"idle" | "loading" | "denied">("idle");
   // Browsers only expose geolocation on secure origins (https or localhost).
   // On a plain-http page the request is refused before any prompt, which this
   // page would then report as "Location wasn't shared" — blaming a user who
@@ -274,7 +274,6 @@ export function PriceSearch() {
   const canLocate = typeof window !== "undefined" && window.isSecureContext && "geolocation" in navigator;
 
   function shareLocation() {
-    if (!navigator.geolocation) { setLocStatus("unsupported"); return; }
     setLocStatus("loading");
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -924,11 +923,6 @@ export function PriceSearch() {
                       {locStatus === "denied" && (
                         <p className="mt-1 text-xs text-gray-500">
                           Location wasn&rsquo;t shared — results stay sorted by provider count.
-                        </p>
-                      )}
-                      {locStatus === "unsupported" && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          This browser can&rsquo;t share your location.
                         </p>
                       )}
                     </div>}

@@ -64,9 +64,10 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from drug_names import friendly_dosage_form
-from pydantic import BaseModel, Field
+from ratelimit import RateLimited, RateLimiter
 
 # Month directories mean this path never changes when a new month is published;
 # build_serving.py rewrites this file from whichever month is _COMPLETE.
@@ -621,6 +622,7 @@ def db() -> duckdb.DuckDBPyConnection:
         if NADAC_PRICES.exists():
             _con.execute(f"CREATE TABLE nadac_drugs AS "
                          f"SELECT * FROM read_csv_auto('{NADAC_PRICES.as_posix()}')")
+        threading.Thread(target=_load_facility_keys, daemon=True).start()
     return _con
 
 
@@ -1882,29 +1884,14 @@ Catalog (service_key | display name | category):
 # one process ever touching it. Not durable across a restart, and wouldn't
 # be safe if this ever ran with multiple workers — fine for a single $6/mo
 # container, revisit if that changes.
-_rate_state: dict[str, list[float]] = {}
+_ai_limiter = RateLimiter(limit=5, window=60.0)
 
 
-def _rate_limit(state: dict[str, list[float]], ip: str, limit: int,
-                window: float, message: str) -> None:
-    """Shared by every per-IP limiter in this file (AI search, reviews,
-    appointment requests, provider auth) — they were four copies of this.
-    Also prunes: a bare per-IP dict only ever trimmed an IP's list when that
-    same IP came back, so entries for one-off visitors lived forever."""
-    now = time.time()
-    if len(state) > 2000:
-        for stale in [k for k, v in state.items() if not v or now - v[-1] >= window]:
-            del state[stale]
-    hits = [t for t in state.get(ip, []) if now - t < window]
-    if len(hits) >= limit:
-        raise HTTPException(429, message)
-    hits.append(now)
-    state[ip] = hits
-
-
-def _check_rate_limit(ip: str, limit: int = 5, window: float = 60.0) -> None:
-    _rate_limit(_rate_state, ip, limit, window,
-                "Too many AI search requests — try again in a minute.")
+def _check_rate_limit(ip: str) -> None:
+    try:
+        _ai_limiter.check(ip)
+    except RateLimited:
+        raise HTTPException(429, "Too many AI search requests — try again in a minute.")
 
 
 # Gates /api/services/ai-search behind proof that a real /api/services call
@@ -2349,6 +2336,8 @@ def facility_services(facility_key: str, address: str, city: str):
     addr_u, city_u = address.upper().strip(), city.upper().strip()
     if _facility_key(addr_u, city_u) != facility_key:
         raise HTTPException(400, "facility_key does not match address/city")
+    if not _is_known_facility_key(facility_key):
+        raise HTTPException(404, "no services found at this address")
     payload = _facility_services_payload(addr_u, city_u)
     if payload is None:
         raise HTTPException(404, "no services found at this address")
@@ -2447,30 +2436,49 @@ class ReviewBody(BaseModel):
 # safe, and resetting on every redeploy just means the worst case after a
 # deploy is one extra review from the same visitor, not a real abuse vector
 # at this site's scale.
-_review_rate_state: dict[str, list[float]] = {}
+_review_limiter = RateLimiter(limit=5, window=3600.0)
 
 
 def _check_review_rate_limit(ip: str) -> None:
-    _rate_limit(_review_rate_state, ip, 5, 3600.0,
-                "Too many reviews submitted recently — try again in a bit.")
+    try:
+        _review_limiter.check(ip)
+    except RateLimited:
+        raise HTTPException(429, "Too many reviews submitted recently — try again in a bit.")
 
 
 _valid_facility_keys: Optional[frozenset[str]] = None
+_facility_keys_build_lock = threading.Lock()
+
+
+def _load_facility_keys() -> frozenset[str]:
+    """facility_key is an unsalted hash of (address, city), so it can't be
+    checked by looking it up — hash every real location once and keep the
+    set. Used to reject reviews and facility lookups for places that don't
+    exist before they cost anything: without it a caller can hash any made-up
+    address (the hash is public) and make the facility endpoint scan the
+    whole prices table per request, or write reviews under keys no page will
+    ever read.
+
+    Warmed by a background thread once db() finishes, NOT inside db(): the
+    canary health check allows 240s and a cold start already takes 215-235s,
+    so startup work here would risk failing deploys. If a request arrives
+    before the warm-up is done it builds the set itself; the lock keeps the
+    two from doing it twice."""
+    global _valid_facility_keys
+    if _valid_facility_keys is None:
+        with _facility_keys_build_lock:
+            if _valid_facility_keys is None:
+                rows = q("""
+                    SELECT DISTINCT upper(trim(address)) AS address, upper(trim(city)) AS city
+                    FROM prices WHERE address IS NOT NULL AND trim(address) <> ''
+                """)
+                _valid_facility_keys = frozenset(
+                    _facility_key(r["address"], r["city"]) for r in rows)
+    return _valid_facility_keys
 
 
 def _is_known_facility_key(facility_key: str) -> bool:
-    """facility_key is a hash of (address, city), so it can't be checked by
-    looking it up — instead hash every real location once and keep the set.
-    Built lazily on first review (not at startup, which already pays for the
-    prices table) and static after that, same as the data it's built from."""
-    global _valid_facility_keys
-    if _valid_facility_keys is None:
-        rows = q("""
-            SELECT DISTINCT upper(trim(address)) AS address, upper(trim(city)) AS city
-            FROM prices WHERE address IS NOT NULL AND trim(address) <> ''
-        """)
-        _valid_facility_keys = frozenset(_facility_key(r["address"], r["city"]) for r in rows)
-    return facility_key in _valid_facility_keys
+    return facility_key in _load_facility_keys()
 
 
 @app.post("/api/facilities/{facility_key}/reviews")
@@ -2666,12 +2674,14 @@ def _require_provider(request: Request) -> dict:
 # Same reasoning as the AI-search and review rate limiters elsewhere in this
 # file: single uvicorn worker, so in-process state is fine, and it resets on
 # redeploy which only matters for abuse, not correctness.
-_provider_auth_rate_state: dict[str, list[float]] = {}
+_provider_auth_limiter = RateLimiter(limit=8, window=300.0)
 
 
-def _check_provider_auth_rate_limit(ip: str, limit: int = 8, window: float = 300.0) -> None:
-    _rate_limit(_provider_auth_rate_state, ip, limit, window,
-                "Too many attempts — try again in a few minutes.")
+def _check_provider_auth_rate_limit(ip: str) -> None:
+    try:
+        _provider_auth_limiter.check(ip)
+    except RateLimited:
+        raise HTTPException(429, "Too many attempts — try again in a few minutes.")
 
 
 class ProviderSignupBody(BaseModel):
@@ -2935,12 +2945,14 @@ class AppointmentRequestBody(BaseModel):
 
 # Same reasoning as _check_review_rate_limit above -- open, unauthenticated
 # endpoint, rate limit is the only real defense against spam at this scale.
-_appointment_rate_state: dict[str, list[float]] = {}
+_appointment_limiter = RateLimiter(limit=5, window=3600.0)
 
 
 def _check_appointment_rate_limit(ip: str) -> None:
-    _rate_limit(_appointment_rate_state, ip, 5, 3600.0,
-                "Too many requests sent recently — try again in a bit.")
+    try:
+        _appointment_limiter.check(ip)
+    except RateLimited:
+        raise HTTPException(429, "Too many requests sent recently — try again in a bit.")
 
 
 @app.post("/api/facilities/{facility_key}/request-appointment")

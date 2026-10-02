@@ -38,7 +38,7 @@ export function GlossaryTerm({ term, children }: { term: GlossaryKey; children?:
           // from Enter/Space the way a real <button> does — without this a
           // keyboard user can focus the term and never open the definition.
           onKeyDown={e => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); e.currentTarget.click(); }
           }}
           className="underline decoration-dotted decoration-gray-400 underline-offset-2 cursor-pointer hover:decoration-gray-600"
         >

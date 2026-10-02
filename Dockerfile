@@ -15,7 +15,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY api/serving_api.py api/drug_names.py ./
+COPY api/*.py ./
 COPY --from=frontend /app/dist ./dist
 # The parquet data the API reads. Staged into ./deploy/data first by
 # deploy/package_data.ps1 — see DEPLOY.md.
