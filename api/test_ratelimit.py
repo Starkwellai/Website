@@ -5,8 +5,9 @@ logic never exercised. Pure, no server:
 """
 import sys
 import threading
+import time
 
-from ratelimit import RateLimited, RateLimiter, resolve_client_ip
+from ratelimit import RateLimited, RateLimiter, parse_trusted_proxies, resolve_client_ip
 
 
 def _blocked(rl, key, now):
@@ -107,12 +108,24 @@ def test_concurrent_flood_never_raises():
     assert _hammer(rl, worker, n_threads=8) == []
 
 
+class _SlowReadDict(dict):
+    """Pauses between a key's count being read and the new hit being written,
+    which is the window an unlocked check-then-append races through. Makes the
+    overshoot deterministic: without this, a lockless limiter still allowed
+    exactly 5 in 4 of 5 runs, so the test would usually stay green."""
+    def get(self, key, default=None):
+        value = super().get(key, default)
+        time.sleep(0.002)
+        return value
+
+
 def test_concurrent_requests_cannot_overshoot_the_limit():
     rl = RateLimiter(limit=5, window=3600)
+    rl._hits = _SlowReadDict()
     allowed = []
 
     def worker(i):
-        for _ in range(50):
+        for _ in range(20):
             try:
                 rl.check("same-ip", now=1.0)
                 allowed.append(1)
@@ -123,22 +136,52 @@ def test_concurrent_requests_cannot_overshoot_the_limit():
     assert len(allowed) == 5
 
 
-def test_client_ip_direct_connection_ignores_forwarded_header():
-    # Not behind a proxy: a client-supplied X-Forwarded-For must NOT choose
-    # its own rate-limit key.
-    assert resolve_client_ip("203.0.113.9", "1.2.3.4", behind_proxy=False) == "203.0.113.9"
+PROXY = parse_trusted_proxies("10.0.0.2")
+
+
+def test_client_ip_with_no_trusted_proxies_ignores_the_header():
+    # Directly exposed: a client-supplied X-Forwarded-For must NOT choose its
+    # own rate-limit key.
+    assert resolve_client_ip("203.0.113.9", "1.2.3.4") == "203.0.113.9"
 
 
 def test_client_ip_behind_proxy_uses_the_proxy_appended_entry():
     # The proxy appends the real peer; anything before it was client-claimed.
-    assert resolve_client_ip("10.0.0.2", "6.6.6.6, 198.51.100.7", behind_proxy=True) == "198.51.100.7"
-    assert resolve_client_ip("10.0.0.2", "198.51.100.7", behind_proxy=True) == "198.51.100.7"
+    assert resolve_client_ip("10.0.0.2", "6.6.6.6, 198.51.100.7", PROXY) == "198.51.100.7"
+    assert resolve_client_ip("10.0.0.2", "198.51.100.7", PROXY) == "198.51.100.7"
+
+
+def test_client_ip_header_from_a_non_proxy_peer_is_ignored():
+    # The container port is also reachable without the proxy. A caller that is
+    # not the proxy must not be able to pick its own key by forging the header.
+    assert resolve_client_ip("203.0.113.9", "198.51.100.7", PROXY) == "203.0.113.9"
+
+
+def test_client_ip_trusted_proxy_cidr_and_ipv6():
+    nets = parse_trusted_proxies("172.17.0.0/16, ::1")
+    assert resolve_client_ip("172.17.0.1", "198.51.100.7", nets) == "198.51.100.7"
+    assert resolve_client_ip("172.18.0.1", "198.51.100.7", nets) == "172.18.0.1"
+    assert resolve_client_ip("::1", "198.51.100.7", nets) == "198.51.100.7"
+    # an IPv4 peer is never matched by an IPv6 network
+    assert resolve_client_ip("10.0.0.2", "198.51.100.7", parse_trusted_proxies("::/0")) == "10.0.0.2"
 
 
 def test_client_ip_falls_back_when_header_missing_or_blank():
-    assert resolve_client_ip("10.0.0.2", None, behind_proxy=True) == "10.0.0.2"
-    assert resolve_client_ip("10.0.0.2", " , ", behind_proxy=True) == "10.0.0.2"
-    assert resolve_client_ip(None, None, behind_proxy=False) == "unknown"
+    assert resolve_client_ip("10.0.0.2", None, PROXY) == "10.0.0.2"
+    assert resolve_client_ip("10.0.0.2", " , ", PROXY) == "10.0.0.2"
+    assert resolve_client_ip(None, None) == "unknown"
+    assert resolve_client_ip("not-an-ip", "198.51.100.7", PROXY) == "not-an-ip"
+
+
+def test_malformed_proxy_setting_fails_loudly():
+    for bad in ("10.0.0.2, banana", "300.1.1.1"):
+        try:
+            parse_trusted_proxies(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad!r}")
+    assert parse_trusted_proxies("") == ()
+    assert parse_trusted_proxies(" , ") == ()
 
 
 if __name__ == "__main__":

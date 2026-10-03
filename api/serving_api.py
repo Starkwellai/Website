@@ -67,7 +67,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from drug_names import friendly_dosage_form
-from ratelimit import RateLimited, RateLimiter, resolve_client_ip
+from ratelimit import RateLimited, RateLimiter, parse_trusted_proxies, resolve_client_ip
 
 # Month directories mean this path never changes when a new month is published;
 # build_serving.py rewrites this file from whichever month is _COMPLETE.
@@ -1879,24 +1879,20 @@ any medical opinion — only ever call the match_services tool.
 Catalog (service_key | display name | category):
 {catalog}"""
 
-# Single uvicorn worker (see the __main__ block at the bottom of this file —
-# no `workers=` argument), so this in-process dict is safe: there's exactly
-# one process ever touching it. Not durable across a restart, and wouldn't
-# be safe if this ever ran with multiple workers — fine for a single $6/mo
-# container, revisit if that changes.
-# Set when a TLS-terminating reverse proxy sits in front of uvicorn (the usual
-# shape once the site has a domain and HTTPS). Without it every visitor
-# arrives from the proxy's address and all the limits below collapse into one
-# site-wide bucket. Off by default: honoring X-Forwarded-For from a client that
-# isn't behind a proxy lets it pick its own rate-limit key.
-BEHIND_PROXY = os.environ.get("STARKWELL_BEHIND_PROXY", "") == "1"
+# Addresses of reverse proxies in front of uvicorn, comma-separated (IPs or
+# CIDRs), e.g. STARKWELL_TRUSTED_PROXIES=172.17.0.1. Needed once the site has
+# a domain and HTTPS behind Caddy/nginx: every visitor then arrives from the
+# proxy's address and all the limits below would collapse into one site-wide
+# bucket. X-Forwarded-For is honored only from these peers (see
+# resolve_client_ip). Empty by default: nothing is trusted.
+TRUSTED_PROXIES = parse_trusted_proxies(os.environ.get("STARKWELL_TRUSTED_PROXIES", ""))
 
 
 def _client_ip(request: Request) -> str:
     return resolve_client_ip(
         request.client.host if request.client else None,
         request.headers.get("x-forwarded-for"),
-        BEHIND_PROXY,
+        TRUSTED_PROXIES,
     )
 
 
@@ -1907,6 +1903,11 @@ def _enforce(limiter: RateLimiter, ip: str, message: str) -> None:
         raise HTTPException(429, message)
 
 
+# Single uvicorn worker (see the __main__ block at the bottom of this file —
+# no `workers=` argument), so the limiters' in-process state is safe: there's
+# exactly one process ever touching it. Not durable across a restart, and
+# wouldn't be safe if this ever ran with multiple workers — fine for a single
+# $6/mo container, revisit if that changes.
 _ai_limiter = RateLimiter(limit=5, window=60.0)
 
 

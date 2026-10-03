@@ -1,5 +1,12 @@
 """Exercise every serving-API endpoint against every parameter combination.
 
+A live-server script, not a unit test: start the API on port 8001 first, then
+    python api/endpoint_sweep.py
+It exits non-zero on any 5xx or unmet expectation. Deliberately NOT named
+test_*.py: it makes HTTP calls at import time, so pytest collecting it errors
+out the whole run when no server is up. The unit tests (test_*.py) need no
+server.
+
 The city-filter 500 was a Binder Error: adding the system_at join gave the query
 two `city` columns, and the unqualified reference in the WHERE clause only got
 bound when a city was actually supplied. Every test up to that point had left

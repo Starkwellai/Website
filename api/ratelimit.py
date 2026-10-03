@@ -13,9 +13,12 @@ runs on a threadpool, so check() is called concurrently.
 """
 from __future__ import annotations
 
+import ipaddress
 import threading
 import time
-from typing import Optional
+from typing import Optional, Sequence, Union
+
+Network = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 
 
 class RateLimited(Exception):
@@ -66,20 +69,39 @@ class RateLimiter:
             return len(self._hits)
 
 
+def parse_trusted_proxies(spec: str) -> tuple[Network, ...]:
+    """Parse a comma-separated list of proxy addresses or CIDR ranges
+    ("172.17.0.1, 10.0.0.0/8"). Raises ValueError on anything malformed so a
+    typo fails the container at startup, where the deploy's canary check
+    catches it, instead of silently trusting nothing (or everything)."""
+    return tuple(ipaddress.ip_network(part.strip(), strict=False)
+                 for part in spec.split(",") if part.strip())
+
+
 def resolve_client_ip(peer: Optional[str], forwarded_for: Optional[str],
-                      behind_proxy: bool) -> str:
+                      trusted_proxies: Sequence[Network] = ()) -> str:
     """The address rate limits are keyed on.
 
     Directly exposed (today): the TCP peer. Behind a reverse proxy that
     terminates TLS (nginx, Caddy, a platform load balancer) the peer is the
     proxy for every visitor, so every limit would collapse into one site-wide
-    bucket and one person could lock out all providers. With behind_proxy set,
-    use the LAST X-Forwarded-For entry: that is the one the single trusted
-    proxy appended, whereas earlier entries are whatever the client claimed.
-    Off by default, because honoring that header from a client that is NOT
-    behind a proxy lets anyone pick their own rate-limit key."""
-    if behind_proxy and forwarded_for:
-        last = forwarded_for.split(",")[-1].strip()
-        if last:
-            return last
+    bucket and one person could lock out all providers.
+
+    X-Forwarded-For is honored ONLY when the TCP peer is one of
+    `trusted_proxies`, and then the LAST entry is used: that is the one the
+    trusted proxy appended, whereas earlier entries are whatever the client
+    claimed. Gating on the peer (rather than a bare on/off flag) matters
+    because the container port is also reachable without going through the
+    proxy: with a flag, anyone could hit it directly with a forged header and
+    pick a fresh rate-limit key on every request, defeating the login
+    brute-force limit. Empty by default, so nothing is trusted."""
+    if peer and forwarded_for and trusted_proxies:
+        try:
+            peer_ip = ipaddress.ip_address(peer)
+        except ValueError:
+            return peer
+        if any(peer_ip in net for net in trusted_proxies if net.version == peer_ip.version):
+            last = forwarded_for.split(",")[-1].strip()
+            if last:
+                return last
     return peer or "unknown"

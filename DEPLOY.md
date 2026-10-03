@@ -206,12 +206,26 @@ rebuild.
   [Caddy](https://caddyserver.com/) in front of the container gets free
   auto-renewing HTTPS with about 5 lines of config. Not needed for an IP link
   sent to a handful of people — worth doing once this is more than a demo.
-  **When you add a proxy, also set `STARKWELL_BEHIND_PROXY=1`** on the API
-  container (add it to `/root/starkwell.env`). Without it every visitor
-  arrives from the proxy's address, so the per-visitor limits (5 reviews/hour,
-  5 appointment requests/hour, 8 provider logins per 5 minutes) become one
-  shared bucket for the whole site and a single person can lock everyone out.
-  Leave it unset when there is no proxy: with it on, the API trusts the proxy's
-  `X-Forwarded-For`, which a client talking to it directly could forge. The
-  proxy must append the visitor's address (Caddy and nginx both do by default).
+  **When you add a proxy, two more things are needed**, or the per-visitor
+  limits (5 reviews/hour, 5 appointment requests/hour, 8 provider logins per
+  5 minutes) quietly turn into one shared bucket for the whole site, so a
+  single person can lock every provider out of logging in:
+  1. Tell the API which address the proxy connects from: add
+     `STARKWELL_TRUSTED_PROXIES=<proxy address>` (an IP or CIDR, comma
+     separated) to `/root/starkwell.env`. The API only believes
+     `X-Forwarded-For` from those addresses and uses its **last** entry (the
+     one the proxy appended). A malformed value makes the container fail at
+     startup, which the canary check catches. Find the address with
+     `docker logs starkwell` after a request through the proxy: it is the
+     client address shown for every request.
+  2. Stop publishing the container port to the world. `swap.sh` currently
+     runs `-p 80:8080` (and the canary on 8081), so the API stays reachable
+     without the proxy; use `-p 127.0.0.1:8080:8080` once the proxy exists.
+     This is what makes the header trustworthy, and the API ignores the
+     header from any other caller regardless.
+  The proxy itself must send `X-Forwarded-For`. Caddy's `reverse_proxy` does by
+  default; **nginx does not** — it needs
+  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` in the
+  location block. Without the header the API falls back to the proxy's
+  address and everyone shares one limit, with no error to tell you.
 - Everything above stays at **$6/month total** with no domain.
