@@ -32,6 +32,7 @@ ENV STARKWELL_SLICE=/app/data/serving/service_provider_prices.parquet \
     STARKWELL_CATALOG=/app/data/reference/shoppable_services.parquet \
     STARKWELL_HOSPITAL_STAY_PRICES=/app/data/reference/hospital_stay_prices.parquet \
     STARKWELL_HOSPITAL_STAY_MEDICARE=/app/data/reference/hospital_stay_drg_medicare.parquet \
+    STARKWELL_FACILITY_SERVICES=/app/data/reference/facility_service_summary.parquet \
     STARKWELL_DRUG_PRICES=/app/data/reference/costplus_drug_prices.csv \
     STARKWELL_NADAC_PRICES=/app/data/reference/nadac_current_rates.csv \
     STARKWELL_NETWORK_RATES=/app/data/reference/network_rates.parquet \

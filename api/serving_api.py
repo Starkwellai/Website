@@ -54,7 +54,6 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
@@ -154,6 +153,15 @@ HOSPITAL_STAY_MEDICARE = Path(os.environ.get(
 DRUG_PRICES = Path(os.environ.get(
     "STARKWELL_DRUG_PRICES",
     "D:/Starkwell/data/reference/costplus_drug_prices.csv"))
+# Every priced service at one address, built by build_facility_services.py:
+# 5.5M (location, service) rows, sorted by address. The facility profile page
+# used to compute this live by scanning all 23.6M rows of `prices` per
+# request, which took 14-30s on the production droplet's single weak vCPU
+# (measured 2026-10-03), so it's now a lookup. Semantics are identical to the
+# old live query (verified on 131 locations, incl. every CMS-matched one).
+FACILITY_SERVICES = Path(os.environ.get(
+    "STARKWELL_FACILITY_SERVICES",
+    "D:/Starkwell/data/reference/facility_service_summary.parquet"))
 # CMS's own National Average Drug Acquisition Cost file — a real national
 # benchmark for what pharmacies pay to acquire a drug, not a retail/patient
 # price. Shown alongside Cost Plus Drugs as a second, differently-sourced
@@ -2351,62 +2359,45 @@ def facility_services(facility_key: str, address: str, city: str):
 
     Deliberately not folded into facility_rows (service -> facilities): that
     endpoint's WHERE starts from service_key and GROUPs by address; this one
-    starts from address and GROUPs by service_key. Same `prices` table, two
-    different directions through it.
+    starts from address. Reads FACILITY_SERVICES, a table built offline and
+    sorted by address, so a lookup touches a few row groups — see that
+    constant's comment for why it isn't computed from `prices` live.
     """
     addr_u, city_u = address.upper().strip(), city.upper().strip()
     if _facility_key(addr_u, city_u) != facility_key:
         raise HTTPException(400, "facility_key does not match address/city")
-    if not _is_known_facility_key(facility_key):
-        raise HTTPException(404, "no services found at this address")
-    payload = _facility_services_payload(addr_u, city_u)
-    if payload is None:
-        raise HTTPException(404, "no services found at this address")
-    return {"facility_key": facility_key, **payload}
-
-
-@lru_cache(maxsize=512)
-def _facility_services_payload(addr_u: str, city_u: str) -> Optional[dict]:
-    """One scan of `prices` (the facility's name/rating columns ride along on
-    each service row, since the CMS join is keyed on the address and so is
-    identical across them) and cached — the data is static between deploys,
-    this endpoint is unauthenticated and linked from every result card, and
-    an uncached call was two full-table address scans on a single-vCPU box.
-    A missing location is cached as None so repeated misses don't rescan."""
-    have_dim = FACILITIES.exists()
-    meta_cols = ("NULL AS facility_name, NULL AS rating, NULL AS facility_kind, "
-                 "NULL AS facility_id, NULL AS patient_star, NULL AS surveys")
-    join = ""
-    if have_dim:
-        meta_cols = ("any_value(f.facility_name) AS facility_name, any_value(f.overall_rating) AS rating, "
-                     "any_value(f.facility_kind) AS facility_kind, any_value(f.facility_id) AS facility_id, "
-                     "any_value(f.patient_star) AS patient_star, any_value(f.surveys) AS surveys")
-        join = f"""
-          LEFT JOIN (
-            SELECT {norm_addr('d.address')} AS naddr, upper(trim(d.city)) AS ncity,
-                   d.facility_name, d.overall_rating, d.facility_kind, d.facility_id,
-                   d.patient_star, d.surveys
-            FROM read_parquet('{FACILITIES.as_posix()}') d
-          ) f ON f.naddr = {norm_addr('s.address')} AND f.ncity = upper(trim(s.city))"""
-
+    if not FACILITY_SERVICES.exists():
+        raise HTTPException(503, "facility data not available")
     rows = q(f"""
-        SELECT service_key, any_value(display_name) AS display_name, any_value(category) AS category,
-               count(DISTINCT npi) AS providers, median(median_rate) AS median_price,
-               {meta_cols}
-        FROM prices s
-        {join}
-        WHERE upper(trim(s.address)) = ? AND upper(trim(s.city)) = ? AND s.is_primary
-        GROUP BY service_key
-        ORDER BY providers DESC
+        SELECT service_key, display_name, category, providers, median_price
+        FROM read_parquet('{FACILITY_SERVICES.as_posix()}')
+        WHERE address = ? AND city = ?
+        ORDER BY providers DESC, service_key
     """, [addr_u, city_u])
     if not rows:
-        return None
-    meta_keys = ("facility_name", "rating", "facility_kind", "facility_id", "patient_star", "surveys")
-    meta = {k: rows[0][k] for k in meta_keys}
-    for r in rows:
-        for k in meta_keys:
-            del r[k]
-    return {"address": addr_u, "city": city_u, **meta, "services": rows}
+        raise HTTPException(404, "no services found at this address")
+    return {"facility_key": facility_key, "address": addr_u, "city": city_u,
+            **_cms_facility_meta(addr_u, city_u), "services": rows}
+
+
+def _cms_facility_meta(addr_u: str, city_u: str) -> dict:
+    """The CMS-verified name and quality ratings for one address, if it is one
+    of the ~100 hospitals/ASCs on the CMS list. One address against that small
+    file, using the same normalised exact match facility_rows() trusts; NULLs
+    when there's no match, same as the old live join gave."""
+    empty = {"facility_name": None, "rating": None, "facility_kind": None,
+             "facility_id": None, "patient_star": None, "surveys": None}
+    if not FACILITIES.exists():
+        return empty
+    rows = q(f"""
+        SELECT facility_name, overall_rating AS rating, facility_kind, facility_id,
+               patient_star, surveys
+        FROM read_parquet('{FACILITIES.as_posix()}') d
+        WHERE {norm_addr('d.address')} = {norm_addr('CAST(? AS VARCHAR)')}
+          AND upper(trim(d.city)) = ?
+        LIMIT 1
+    """, [addr_u, city_u])
+    return rows[0] if rows else empty
 
 
 # ---- facility reviews ------------------------------------------------------

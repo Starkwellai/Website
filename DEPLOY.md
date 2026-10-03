@@ -200,6 +200,13 @@ picks up the new files). `/root/starkwell.env` from step 2 already lives on
 the droplet and doesn't need to be redone — it survives every future
 rebuild.
 
+**Rebuild the facility summary first.** The facility profile page reads
+`facility_service_summary.parquet`, a table derived from the serving slice
+(`python build_facility_services.py` in `D:\Starkwell`, ~10s). It is not
+recomputed on the droplet, so after any rebuild of `service_provider_prices.parquet`
+run that script *before* `package_data.ps1`, or the page keeps showing last
+month's per-location prices while every other page shows the new ones.
+
 ## 6. Optional, later, still cheap
 
 - **A real domain + HTTPS**: a domain costs ~$10-15/year, and
