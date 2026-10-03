@@ -22,8 +22,8 @@ import { getCurrentProviderAccount, signupProviderAccount } from "../../lib/star
  * navigated away. That version also collected a password with nowhere to
  * check it against, which is worse than not asking at all.
  *
- * What's deliberately NOT here: NPI verification against NPPES (still
- * manual, by us, after signup) and an "email a verification link" step —
+ * What's deliberately NOT here: NPI verification against NPPES (not built
+ * yet, and the page says so) and an "email a verification link" step —
  * there is no outbound-email service configured yet (see api/serving_api.py),
  * so this doesn't pretend otherwise.
  */
@@ -142,9 +142,7 @@ export function ProviderSignup() {
                   <h3 className="text-2xl font-bold text-blue-900">Create your account</h3>
                 </div>
                 <p className="text-gray-700 mb-6">
-                  Tell us about your practice. A real person on our team reviews every
-                  signup and reaches out personally — there's no automated approval yet,
-                  so expect a human, not a bot.
+                  Tell us about your practice. Your account works right away, but we don't independently verify practices or credentials yet. That's coming soon.
                 </p>
               </div>
             </div>
@@ -252,7 +250,7 @@ export function ProviderSignup() {
                         className="border-blue-200 focus:border-blue-500"
                       />
                       <p className="text-xs text-gray-500">
-                        We'll confirm this against the public NPPES registry ourselves before your listing goes live.
+                        Optional. We don't check NPI numbers against the national registry yet; that's coming soon.
                       </p>
                     </div>
 

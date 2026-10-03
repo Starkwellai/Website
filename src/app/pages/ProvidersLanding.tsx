@@ -383,7 +383,7 @@ export function ProvidersLanding() {
             <div>
               <img src={logo} alt="Starkwell" className="h-8 mb-4 rounded-[5px]" />
               <p className="text-sm text-gray-400">
-                Connecting patients with quality healthcare providers through transparency and technology.
+                Helping Utah patients see real prices before they book, and helping practices be found.
               </p>
             </div>
             <div>

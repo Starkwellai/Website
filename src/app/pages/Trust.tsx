@@ -221,7 +221,7 @@ export function Trust() {
                 className="h-8 mb-4"
               />
               <p className="text-sm text-gray-600">
-                Your AI-powered healthcare marketplace for finding care and comparing prices.
+                Compare real healthcare prices across Utah, straight from insurers&rsquo; published rate files.
               </p>
             </div>
 

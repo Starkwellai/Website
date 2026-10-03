@@ -11,7 +11,7 @@ import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
  * none of which exists. There is no NPPES integration and no outbound email
  * service configured anywhere in this project (see api/serving_api.py), so
  * this says what's actually true instead: the account is real and already
- * usable, and a human on our team follows up manually.
+ * usable, claims go live immediately, and nothing is verified yet.
  */
 export function ProviderVerificationPending() {
   const navigate = useNavigate();
@@ -47,10 +47,7 @@ export function ProviderVerificationPending() {
               <div className="bg-blue-50 p-6 rounded-lg border border-blue-100">
                 <h3 className="font-semibold text-blue-900 text-lg mb-2">What happens next</h3>
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  We're a small team, so there's no automated approval yet — a real person
-                  reviews every new practice, confirms your NPI against the public NPPES
-                  registry, and reaches out personally within 1-2 business days to help get
-                  your listing set up.
+                  You can claim your practice's location from your dashboard now. A claimed listing appears on the public page right away. We don't independently verify practices, credentials or NPI numbers yet; that's coming soon, and we'll update this page when it is.
                 </p>
               </div>
 
