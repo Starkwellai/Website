@@ -41,3 +41,14 @@ docker tag starkwell:new starkwell:latest
 echo "Waiting for production to answer on port 80..."
 until curl -sf "http://localhost/api/health" >/dev/null 2>&1; do sleep 5; done
 echo "Live and healthy."
+
+# Keep only the newest few rollback images. Every swap tags the previous image
+# starkwell:rollback-<time> (~1.5GB each); 26 had piled up by 2026-10-03 and
+# the droplet's disk hit 91%. The tag names sort chronologically. Runs last and
+# is allowed to fail: it must never turn a successful deploy into an error
+# (with `set -o pipefail`, grep finding no rollback tags yet would otherwise
+# abort the script here).
+KEEP_ROLLBACKS=4
+docker images starkwell --format '{{.Tag}}' | grep '^rollback-' | sort -r   | tail -n +$((KEEP_ROLLBACKS + 1))   | while read -r tag; do
+      docker rmi "starkwell:$tag" >/dev/null 2>&1 && echo "Removed old rollback image: $tag" || true
+    done || true

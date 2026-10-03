@@ -182,14 +182,16 @@ This is also the fix for the 2026-09-14 outage described above: the bad
 image was never re-tagged as `:latest`, so `starkwell:latest` still pointed
 at the last known-good build and rolling back was exactly this.
 
-Rollback tags accumulate (~1.3-1.5 GB each) and this droplet's disk isn't
-huge — check in on it occasionally:
+Rollback tags are ~1.5 GB each, and left alone they filled this droplet's
+disk (26 of them, 91% full, on 2026-10-03). `swap.sh` therefore now removes
+all but the newest 4 after every successful swap, so **you can roll back
+about four deploys, not further**; the cleanup runs last and can't fail a
+deploy. Worth checking in on occasionally anyway:
 ```bash
 df -h /                                  # keep an eye on free space
 docker system df                         # build cache in particular can
                                           # grow to several GB doing nothing
 docker builder prune -af                 # always safe — cached layers only
-docker rmi starkwell:rollback-<old-tag>  # keep the last ~5-6, drop older ones
 ```
 
 ## 5. Refreshing the data later
