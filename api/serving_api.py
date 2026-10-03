@@ -153,6 +153,19 @@ HOSPITAL_STAY_MEDICARE = Path(os.environ.get(
 DRUG_PRICES = Path(os.environ.get(
     "STARKWELL_DRUG_PRICES",
     "D:/Starkwell/data/reference/costplus_drug_prices.csv"))
+# One row per service (752) and per category (23): provider count, median and
+# 5th/95th percentile price, min/max. Built by build_service_summary.py. Every
+# search, browse tile and page load used to recompute these from all 23.6M
+# rows of `prices` (6.4s for categories and 2.5-4.9s per search on the
+# production droplet, queued one behind another by the single query lock);
+# they only change when the data is rebuilt. Identical to the old live
+# aggregation for every service and category (checked on build).
+SERVICE_SUMMARY = Path(os.environ.get(
+    "STARKWELL_SERVICE_SUMMARY",
+    "D:/Starkwell/data/reference/service_summary.parquet"))
+CATEGORY_SUMMARY = Path(os.environ.get(
+    "STARKWELL_CATEGORY_SUMMARY",
+    "D:/Starkwell/data/reference/category_summary.parquet"))
 # Every priced service at one address, built by build_facility_services.py:
 # 5.5M (location, service) rows, sorted by address. The facility profile page
 # used to compute this live by scanning all 23.6M rows of `prices` per
@@ -630,6 +643,12 @@ def db() -> duckdb.DuckDBPyConnection:
         if NADAC_PRICES.exists():
             _con.execute(f"CREATE TABLE nadac_drugs AS "
                          f"SELECT * FROM read_csv_auto('{NADAC_PRICES.as_posix()}')")
+        if SERVICE_SUMMARY.exists():
+            _con.execute(f"CREATE TABLE service_summary AS "
+                         f"SELECT * FROM read_parquet('{SERVICE_SUMMARY.as_posix()}')")
+        if CATEGORY_SUMMARY.exists():
+            _con.execute(f"CREATE TABLE category_summary AS "
+                         f"SELECT * FROM read_parquet('{CATEGORY_SUMMARY.as_posix()}')")
         threading.Thread(target=_load_facility_keys, daemon=True).start()
     return _con
 
@@ -647,13 +666,26 @@ def q(sql: str, params: list[Any] | None = None) -> list[dict]:
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def _require_service_summary() -> None:
+    if not (SERVICE_SUMMARY.exists() and CATEGORY_SUMMARY.exists()):
+        raise HTTPException(503, "service data not available")
+
+
+# The counts only change when the data is rebuilt (i.e. on redeploy), but this
+# used to scan all 23.6M rows on every call: ~3.3s of the single query lock on
+# the production droplet for each deploy-script poll, monitor or bot hit.
+_health_stats: Optional[dict] = None
+
+
 @app.get("/api/health")
 def health():
+    global _health_stats
     if not SLICE.exists():
         return {"ok": False, "detail": f"missing slice: {SLICE}"}
-    r = q("SELECT count(*) n, count(DISTINCT npi) providers, "
-          "count(DISTINCT service_key) services FROM prices")
-    return {"ok": True, "slice": str(SLICE), **r[0]}
+    if _health_stats is None:
+        _health_stats = q("SELECT count(*) n, count(DISTINCT npi) providers, "
+                          "count(DISTINCT service_key) services FROM prices")[0]
+    return {"ok": True, "slice": str(SLICE), **_health_stats}
 
 
 # Common stopwords in casual health queries. The old search required EVERY
@@ -1483,7 +1515,8 @@ def _get_vocabulary() -> set[str]:
     unrelated but more common English word."""
     global _vocabulary
     if _vocabulary is None:
-        rows = q("SELECT DISTINCT display_name, search_terms FROM prices", [])
+        _require_service_summary()
+        rows = q("SELECT display_name, search_terms FROM service_summary", [])
         words: set[str] = set()
         for row in rows:
             for field in (row.get("display_name"), row.get("search_terms")):
@@ -1671,9 +1704,13 @@ def _log_page_view(path: str, user_agent: str) -> None:
 
 
 def _services_rows(
-    where: list[str], params: list[Any], limit: int, order_by: str = "providers DESC"
+    where: list[str], params: list[Any], limit: int,
+    order_by: str = "providers DESC, service_key"
 ) -> list[dict]:
-    """Shared aggregation behind /api/services' two search passes below."""
+    """Shared lookup behind /api/services' two search passes below. Reads the
+    precomputed service_summary, which already holds only the headline billing
+    component (is_primary) — see SERVICE_SUMMARY's comment — so callers no
+    longer filter on is_primary and no aggregation happens here."""
     # low_price/high_price use the 5th/95th percentile, not true min/max. A
     # blanket network contract can leave a grocery-store pharmacy with a
     # $0.01 "rate" for an MRI it will never actually perform — real data, but
@@ -1687,19 +1724,12 @@ def _services_rows(
     # not hidden, just not the headline. The UI shows low_price/high_price as
     # "typical price range" and surfaces the full pair on demand, so a $0.01
     # blanket-contract row is still reachable, never erased.
+    _require_service_summary()
     return q(f"""
-        SELECT service_key,
-               any_value(display_name)      AS display_name,
-               any_value(category)          AS category,
-               count(DISTINCT npi)          AS providers,
-               median(median_rate)          AS typical_price,
-               quantile_cont(median_rate, 0.05) AS low_price,
-               quantile_cont(median_rate, 0.95) AS high_price,
-               min(median_rate)             AS low_price_full,
-               max(median_rate)             AS high_price_full
-        FROM prices
-        WHERE {' AND '.join(where)}
-        GROUP BY service_key
+        SELECT service_key, display_name, category, providers,
+               typical_price, low_price, high_price, low_price_full, high_price_full
+        FROM service_summary
+        WHERE {' AND '.join(where) or 'TRUE'}
         ORDER BY {order_by}
         LIMIT {int(limit)}
     """, params)
@@ -1721,12 +1751,13 @@ def services(
     limit: int = Query(30, ge=1, le=200),
 ):
     """Procedure-first search. This is the product's entry point."""
-    # is_primary keeps this consistent with facility_rows() and provider_rows(),
-    # both of which already default to the headline component only — without
-    # it, a $280 professional read and a $1,592 facility charge for the same
-    # service get averaged and ranged together, which is not a price anyone
-    # is quoted for anything.
-    base_where = ["is_primary"]
+    # service_summary is built from headline-component (is_primary) rows only,
+    # which keeps this consistent with facility_rows() and provider_rows() —
+    # both default to the headline component. Without that, a $280
+    # professional read and a $1,592 facility charge for the same service get
+    # averaged and ranged together, which is not a price anyone is quoted for
+    # anything.
+    base_where: list[str] = []
     base_params: list[Any] = []
     if category:
         base_where.append("category = ?")
@@ -1792,11 +1823,11 @@ def services(
     # display_name alias actually matches, and ranking that first, fixes
     # exactly this case without changing pass 1 (an exact AND match) at all.
     relevance_expr = " + ".join(
-        "CASE WHEN lower(any_value(display_name)) LIKE ? THEN 1 ELSE 0 END"
+        "CASE WHEN lower(display_name) LIKE ? THEN 1 ELSE 0 END"
         for _ in loose_tokens
     )
     relevance_params = [f"%{tok}%" for tok in loose_tokens]
-    order_by = f"({relevance_expr}) DESC, providers DESC"
+    order_by = f"({relevance_expr}) DESC, providers DESC, service_key"
     final_rows = _services_rows(or_where, or_params + relevance_params, limit, order_by=order_by)
     _log_search_activity(q_, len(final_rows))
     if not final_rows:
@@ -1811,19 +1842,12 @@ def _services_by_keys(keys: list[str]) -> dict[str, dict]:
     a short list of AI-picked keys into real, priced result rows."""
     if not keys:
         return {}
+    _require_service_summary()
     rows = q(f"""
-        SELECT service_key,
-               any_value(display_name)      AS display_name,
-               any_value(category)          AS category,
-               count(DISTINCT npi)          AS providers,
-               median(median_rate)          AS typical_price,
-               quantile_cont(median_rate, 0.05) AS low_price,
-               quantile_cont(median_rate, 0.95) AS high_price,
-               min(median_rate)             AS low_price_full,
-               max(median_rate)             AS high_price_full
-        FROM prices
-        WHERE is_primary AND service_key IN ({','.join(['?'] * len(keys))})
-        GROUP BY service_key
+        SELECT service_key, display_name, category, providers,
+               typical_price, low_price, high_price, low_price_full, high_price_full
+        FROM service_summary
+        WHERE service_key IN ({','.join(['?'] * len(keys))})
     """, keys)
     return {r["service_key"]: r for r in rows}
 
@@ -1843,12 +1867,10 @@ def _catalog() -> dict[str, Any]:
     a result the user sees."""
     global _catalog_cache
     if _catalog_cache is None:
+        _require_service_summary()
         rows = q("""
-            SELECT service_key,
-                   any_value(display_name) AS display_name,
-                   any_value(category)     AS category
-            FROM prices WHERE is_primary
-            GROUP BY service_key ORDER BY service_key
+            SELECT service_key, display_name, category
+            FROM service_summary ORDER BY service_key
         """)
         lines = [f"{r['service_key']} | {r['display_name']} | {r['category']}" for r in rows]
         _catalog_cache = {"text": "\n".join(lines), "keys": {r["service_key"] for r in rows}}
@@ -2027,12 +2049,10 @@ def ai_search(body: AISearchBody, request: Request):
 
 @app.get("/api/categories")
 def categories():
+    _require_service_summary()
     return {"categories": q("""
-        SELECT category,
-               count(DISTINCT service_key) AS services,
-               count(DISTINCT npi)         AS providers
-        FROM prices
-        GROUP BY category ORDER BY services DESC
+        SELECT category, services, providers
+        FROM category_summary ORDER BY services DESC, category
     """)}
 
 
@@ -2950,7 +2970,8 @@ def public_listing(facility_key: str):
         ).fetchall()
     finally:
         con.close()
-    return {"facility_key": facility_key, "claims": [dict(r) for r in rows]}
+    return {"facility_key": facility_key, "claims": [dict(r) for r in rows],
+            "appointment_requests_enabled": APPOINTMENT_REQUESTS_ENABLED}
 
 
 # ---- appointment requests ---------------------------------------------------
@@ -2959,6 +2980,18 @@ def public_listing(facility_key: str):
 # no booking/scheduling backend (see the honest empty states in
 # ProviderDashboard.tsx) -- this is a lead landing in the provider's own
 # dashboard, not a real appointment being scheduled anywhere.
+
+# OFF by default. Online appointment requests collect a patient's name, contact
+# details and a free-text reason for seeing a doctor, and deliver them to
+# whichever signed-up account claimed the facility. Two things make that unsafe
+# today: claims aren't verified (anyone can sign up and claim any facility, so
+# an impostor would receive the leads), and the site is served over plain
+# http. The pages say "not live yet" while this is off, and the endpoint
+# refuses requests, so a direct POST can't bypass the UI. Turn on
+# (STARKWELL_APPOINTMENT_REQUESTS=1) only once claims are verified and the
+# site is https.
+APPOINTMENT_REQUESTS_ENABLED = os.environ.get("STARKWELL_APPOINTMENT_REQUESTS", "") == "1"
+
 
 class AppointmentRequestBody(BaseModel):
     patient_name: str = Field(..., min_length=1, max_length=120)
@@ -2980,6 +3013,8 @@ def request_appointment(facility_key: str, body: AppointmentRequestBody, request
     """Public, no auth. Broadcasts to every provider who has claimed this
     exact location (almost always exactly one) rather than making the
     patient pick between duplicate claims."""
+    if not APPOINTMENT_REQUESTS_ENABLED:
+        raise HTTPException(503, "Online appointment requests aren't available yet.")
     client_ip = _client_ip(request)
     _check_appointment_rate_limit(client_ip)
     con = _provider_db()
@@ -3017,7 +3052,7 @@ def my_appointment_requests(request: Request):
         ).fetchall()
     finally:
         con.close()
-    return {"requests": [dict(r) for r in rows]}
+    return {"requests": [dict(r) for r in rows], "enabled": APPOINTMENT_REQUESTS_ENABLED}
 
 
 class UpdateAppointmentStatusBody(BaseModel):

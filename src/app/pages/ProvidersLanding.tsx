@@ -54,8 +54,8 @@ export function ProvidersLanding() {
     },
     {
       icon: Calendar,
-      title: "Real Patient Leads",
-      description: "Patients who find your real price can request an appointment — it lands in your dashboard, ready to follow up on."
+      title: "Patient Appointment Requests",
+      description: "Coming soon: patients who find your real price will be able to request an appointment, landing in your dashboard to follow up on. Not live yet."
     },
     {
       icon: TrendingUp,
@@ -89,8 +89,8 @@ export function ProvidersLanding() {
     },
     {
       step: "3",
-      title: "Accept Appointments",
-      description: "Receive booking requests, manage your schedule, and communicate with patients seamlessly.",
+      title: "Appointment Requests (Coming Soon)",
+      description: "Online appointment requests aren't live yet. Once they launch, patients will be able to ask to be seen and you'll follow up directly.",
       icon: Calendar
     },
     {

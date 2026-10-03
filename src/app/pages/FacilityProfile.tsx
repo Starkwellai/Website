@@ -8,6 +8,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Skeleton } from "../components/ui/skeleton";
 import { MapPin, Star, ShieldCheck, ArrowLeft, Building2 } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
+import { AppointmentRequestsNotLive } from "../components/AppointmentRequestsNotLive";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   getFacilityProfile, getFacilityReviews, getPublicListing, requestAppointment,
@@ -51,9 +52,15 @@ export function FacilityProfile() {
   }, [facilityKey]);
 
   const [claims, setClaims] = useState<PublicListingClaim[]>([]);
+  // Off on the server until claims are verified and the site is https — see
+  // AppointmentRequestsNotLive. Defaults to off so a failed fetch never offers
+  // a form the server would refuse.
+  const [appointmentsEnabled, setAppointmentsEnabled] = useState(false);
   useEffect(() => {
     if (!facilityKey) return;
-    getPublicListing(facilityKey).then(setClaims).catch(() => setClaims([]));
+    getPublicListing(facilityKey)
+      .then(l => { setClaims(l.claims); setAppointmentsEnabled(l.appointmentRequestsEnabled); })
+      .catch(() => { setClaims([]); setAppointmentsEnabled(false); });
   }, [facilityKey]);
 
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -174,7 +181,9 @@ export function FacilityProfile() {
                     </div>
                   ))}
                   <div className="pt-3 border-t border-teal-200">
-                    {requestSent ? (
+                    {!appointmentsEnabled ? (
+                      <AppointmentRequestsNotLive />
+                    ) : requestSent ? (
                       <p className="text-sm text-green-700 flex items-center gap-1.5">
                         <ShieldCheck className="h-4 w-4" />
                         Request sent — the practice will reach out to you directly.

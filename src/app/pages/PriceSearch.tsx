@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popove
 import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldCheck, ClipboardList, ExternalLink, Bookmark, LocateFixed, PiggyBank, Building2 } from "lucide-react";
 import { ProviderMap, type MapPoint } from "../components/ProviderMap";
 import { GlossaryTerm } from "../components/GlossaryTerm";
+import { AppointmentRequestsNotLive } from "../components/AppointmentRequestsNotLive";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
@@ -425,13 +426,17 @@ export function PriceSearch() {
   // /api/facilities/{facility_key}/listing. Public, no auth; most facilities
   // will have none, since claiming is opt-in.
   const [listingClaims, setListingClaims] = useState<PublicListingClaim[]>([]);
+  // Off on the server until claims are verified and the site is https — see
+  // AppointmentRequestsNotLive. Defaults to off so a failed fetch never offers
+  // a form the server would refuse.
+  const [appointmentsEnabled, setAppointmentsEnabled] = useState(false);
 
   useEffect(() => {
-    if (!facility?.facility_key) { setListingClaims([]); return; }
+    if (!facility?.facility_key) { setListingClaims([]); setAppointmentsEnabled(false); return; }
     let cancelled = false;
     getPublicListing(facility.facility_key)
-      .then(claims => { if (!cancelled) setListingClaims(claims); })
-      .catch(() => { if (!cancelled) setListingClaims([]); });
+      .then(l => { if (!cancelled) { setListingClaims(l.claims); setAppointmentsEnabled(l.appointmentRequestsEnabled); } })
+      .catch(() => { if (!cancelled) { setListingClaims([]); setAppointmentsEnabled(false); } });
     return () => { cancelled = true; };
   }, [facility]);
 
@@ -1152,7 +1157,9 @@ export function PriceSearch() {
                       ))}
 
                       <div className="pt-3 border-t border-teal-200">
-                        {requestSent ? (
+                        {!appointmentsEnabled ? (
+                          <AppointmentRequestsNotLive />
+                        ) : requestSent ? (
                           <p className="text-sm text-green-700 flex items-center gap-1.5">
                             <ShieldCheck className="h-4 w-4" />
                             Request sent — the practice will reach out to you directly.

@@ -209,6 +209,18 @@ recomputed on the droplet, so after any rebuild of `service_provider_prices.parq
 run that script *before* `package_data.ps1`, or the page keeps showing last
 month's per-location prices while every other page shows the new ones.
 
+**Same for the price-search summaries.** The price-search page (search, browse
+tiles, category list) reads `service_summary.parquet` and
+`category_summary.parquet`, built by `python build_service_summary.py` in
+`D:\Starkwell` (~1 min). Run it right after `build_facility_services.py`, before
+`package_data.ps1`. Without those two files the search endpoints answer 503
+rather than falling back to a slow scan of the full table.
+
+**Appointment requests are switched off.** The server refuses them (503) and
+the site shows "not live yet" until `STARKWELL_APPOINTMENT_REQUESTS=1` is added
+to `/root/starkwell.env`. Don't turn it on until provider claims are verified
+and the site is on https (requests carry a patient's name and phone number).
+
 ## 6. Optional, later, still cheap
 
 - **A real domain + HTTPS**: a domain costs ~$10-15/year, and

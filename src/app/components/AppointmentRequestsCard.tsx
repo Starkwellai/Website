@@ -7,20 +7,25 @@ import {
   getAppointmentRequests, setAppointmentRequestStatus, type AppointmentRequest,
 } from "../../lib/starkwell";
 
-/** Real leads, not a placeholder: a patient who sees a claimed listing (see
- *  ProviderListingsCard.tsx) can send a request from there, and it lands
- *  here. There's no scheduling backend — this is an inbox, not a booking
- *  system, so the provider follows up by calling/emailing the contact info
- *  the patient gave and marks it "Contacted" once they have. */
+/** An inbox, not a booking system: once online appointment requests are
+ *  switched on (they're off until claims are verified and the site is https —
+ *  see APPOINTMENT_REQUESTS_ENABLED in api/serving_api.py), a patient who sees
+ *  a claimed listing (see ProviderListingsCard.tsx) can send a request that
+ *  lands here, and the provider follows up using the contact info the patient
+ *  gave and marks it "Contacted". While it's off, this card says so rather
+ *  than implying requests are arriving. */
 export function AppointmentRequestsCard() {
   const [requests, setRequests] = useState<AppointmentRequest[]>([]);
+  const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      setRequests(await getAppointmentRequests());
+      const r = await getAppointmentRequests();
+      setRequests(r.requests);
+      setEnabled(r.enabled);
     } catch {
       // best effort — leave whatever was already there
     } finally {
@@ -59,15 +64,20 @@ export function AppointmentRequestsCard() {
             <Badge className="bg-purple-600 hover:bg-purple-600">{newCount} new</Badge>
           )}
         </div>
-        <CardDescription>Patients who found you through a claimed listing and asked to be seen.</CardDescription>
+        <CardDescription>
+          {enabled
+            ? "Patients who found you through a claimed listing and asked to be seen."
+            : "Not live yet — patients can't send appointment requests through Starkwell today."}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
           <p className="text-sm text-gray-500">Loading requests…</p>
         ) : requests.length === 0 ? (
           <div className="text-center py-8 text-sm text-gray-600">
-            No requests yet. Claim your listing and add a description so patients know it's really you —
-            requests will show up here.
+            {enabled
+              ? "No requests yet. Claim your listing and add a description so patients know it's really you — requests will show up here."
+              : "Online appointment requests are something we plan to add. Nothing will appear here until they launch, and we'll let you know when they do."}
           </div>
         ) : (
           <div className="space-y-3">

@@ -832,13 +832,22 @@ export interface PublicListingClaim {
   phone: string | null;
 }
 
+export interface PublicListing {
+  claims: PublicListingClaim[];
+  /** Whether the server is accepting online appointment requests at all.
+   *  Off until claims are verified and the site is https — see
+   *  APPOINTMENT_REQUESTS_ENABLED in api/serving_api.py. When false, show
+   *  <AppointmentRequestsNotLive /> instead of the request form. */
+  appointmentRequestsEnabled: boolean;
+}
+
 /** Public, no auth — what a patient's facility card reads to show a claimed
  *  description alongside the real pricing data. */
-export async function getPublicListing(facilityKey: string): Promise<PublicListingClaim[]> {
-  const r = await get<{ claims: PublicListingClaim[] }>(
+export async function getPublicListing(facilityKey: string): Promise<PublicListing> {
+  const r = await get<{ claims: PublicListingClaim[]; appointment_requests_enabled?: boolean }>(
     `/facilities/${encodeURIComponent(facilityKey)}/listing`
   );
-  return r.claims;
+  return { claims: r.claims, appointmentRequestsEnabled: r.appointment_requests_enabled === true };
 }
 
 export interface AppointmentRequestInput {
@@ -872,11 +881,11 @@ export interface AppointmentRequest {
   created_at: string;
 }
 
-export async function getAppointmentRequests(): Promise<AppointmentRequest[]> {
+export async function getAppointmentRequests(): Promise<{ requests: AppointmentRequest[]; enabled: boolean }> {
   const res = await fetch(`${BASE}/provider/appointment-requests`, { headers: _authHeaders() });
   if (!res.ok) throw new Error(await readErrorDetail(res));
-  const r: { requests: AppointmentRequest[] } = await res.json();
-  return r.requests;
+  const r: { requests: AppointmentRequest[]; enabled?: boolean } = await res.json();
+  return { requests: r.requests, enabled: r.enabled === true };
 }
 
 export async function setAppointmentRequestStatus(id: number, status: "new" | "contacted"): Promise<void> {
