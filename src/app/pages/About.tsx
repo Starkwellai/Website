@@ -4,6 +4,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Check, MapPin } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { ComingSoonBadge } from "../components/ComingSoonBadge";
 
 export function About() {
   const navigate = useNavigate();
@@ -139,7 +140,7 @@ export function About() {
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Check className="size-4 text-white" />
                     </div>
-                    <span className="text-gray-700">AI-powered provider matching</span>
+                    <span className="text-gray-700">AI-assisted search: describe what you need in plain words</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -151,7 +152,7 @@ export function About() {
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Check className="size-4 text-white" />
                     </div>
-                    <span className="text-gray-700">Plain-language result summaries</span>
+                    <span className="text-gray-700">Plain-language result summaries <ComingSoonBadge /></span>
                   </li>
                   <li className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -199,10 +200,10 @@ export function About() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button 
                 size="lg"
-                onClick={() => navigate("/signup-consumer")}
+                onClick={() => navigate("/prices")}
                 className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8"
               >
-                Find Care Near You
+                Compare Prices
               </Button>
               <Button 
                 size="lg"
@@ -235,21 +236,17 @@ export function About() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-3">For Patients</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-600">Find a Doctor</a></li>
-                <li><a href="#" className="hover:text-blue-600">Compare Prices</a></li>
                 <li><button onClick={() => navigate("/prices")} className="hover:text-blue-600">Compare Prices</button></li>
                 <li><button onClick={() => navigate("/subscription-tiers")} className="hover:text-blue-600">Subscription Tiers</button></li>
-                <li><a href="#" className="hover:text-blue-600">Patient Resources</a></li>
+                <li><a href="/help" className="hover:text-blue-600">Patient Resources</a></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold text-gray-900 mb-3">For Providers</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-600">Join Starkwell</a></li>
-                <li><a href="#" className="hover:text-blue-600">Provider Portal</a></li>
-                <li><a href="#" className="hover:text-blue-600">Resources</a></li>
-                <li><a href="#" className="hover:text-blue-600">Contact Sales</a></li>
+                <li><a href="/providers" className="hover:text-blue-600">Join Starkwell</a></li>
+                <li><a href="/provider-dashboard" className="hover:text-blue-600">Provider Portal</a></li>
               </ul>
             </div>
 
@@ -257,8 +254,8 @@ export function About() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
+                <li><span className="text-gray-500">Coming Soon: Arizona</span></li>
+                <li><span className="text-gray-500">Coming Soon: Nevada</span></li>
               </ul>
             </div>
 
@@ -267,8 +264,7 @@ export function About() {
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/about")} className="hover:text-blue-600">About</button></li>
                 <li><button onClick={() => navigate("/trust")} className="hover:text-blue-600">Trust & Safety</button></li>
-                <li><a href="#" className="hover:text-blue-600">Careers</a></li>
-                <li><a href="#" className="hover:text-blue-600">Contact</a></li>
+                <li><a href="mailto:support@starkwell.com" className="hover:text-blue-600">Contact</a></li>
               </ul>
             </div>
 

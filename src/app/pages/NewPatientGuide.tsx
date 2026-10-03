@@ -220,10 +220,8 @@ export function NewPatientGuide() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-3">For Providers</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-600">Join Starkwell</a></li>
-                <li><a href="#" className="hover:text-blue-600">Provider Portal</a></li>
-                <li><a href="#" className="hover:text-blue-600">Resources</a></li>
-                <li><a href="#" className="hover:text-blue-600">Contact Sales</a></li>
+                <li><a href="/providers" className="hover:text-blue-600">Join Starkwell</a></li>
+                <li><a href="/provider-dashboard" className="hover:text-blue-600">Provider Portal</a></li>
               </ul>
             </div>
 
@@ -231,8 +229,8 @@ export function NewPatientGuide() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
+                <li><span className="text-gray-500">Coming Soon: Arizona</span></li>
+                <li><span className="text-gray-500">Coming Soon: Nevada</span></li>
               </ul>
             </div>
 
@@ -241,7 +239,6 @@ export function NewPatientGuide() {
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/about")} className="hover:text-blue-600">About</button></li>
                 <li><button onClick={() => navigate("/trust")} className="hover:text-blue-600">Trust & Safety</button></li>
-                <li><a href="#" className="hover:text-blue-600">Careers</a></li>
               </ul>
             </div>
 

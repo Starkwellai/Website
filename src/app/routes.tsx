@@ -1,9 +1,6 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
+import { AccountsComingSoon } from "./pages/AccountsComingSoon";
 import { Home } from "./pages/Home";
-import { Landing } from "./pages/Landing";
-import { SignupSimple } from "./pages/SignupSimple";
-import { SignupSplit } from "./pages/SignupSplit";
-import { SignupMinimal } from "./pages/SignupMinimal";
 import { Dashboard } from "./pages/Dashboard";
 import { DocumentUpload } from "./pages/DocumentUpload";
 import { Success } from "./pages/Success";
@@ -46,27 +43,27 @@ export const router = createBrowserRouter([
   },
   {
     path: "/signup",
-    element: <SignupSplit />,
+    element: <AccountsComingSoon />,
   },
   {
     path: "/signup-consumer",
-    element: <SignupSplit />,
+    element: <AccountsComingSoon />,
   },
   {
     path: "/signup-provider",
-    element: <SignupSplit />,
+    element: <Navigate to="/provider-signup" replace />,
   },
   {
     path: "/signup-simple",
-    element: <SignupSimple />,
+    element: <AccountsComingSoon />,
   },
   {
     path: "/signup-minimal",
-    element: <SignupMinimal />,
+    element: <AccountsComingSoon />,
   },
   {
     path: "/signup-original",
-    element: <Landing />,
+    element: <AccountsComingSoon />,
   },
   {
     path: "/dashboard",
@@ -183,9 +180,9 @@ export const router = createBrowserRouter([
   },
 
   // Provider recruitment funnel: marketing page -> multi-step clinic
-  // registration -> pending-verification confirmation. Distinct from the
-  // existing /signup-provider (SignupSplit), which is the simpler consumer
-  // vs. provider split used elsewhere on the site.
+  // registration -> pending-verification confirmation. Every patient sign-up
+  // path above lands on AccountsComingSoon (no patient accounts exist yet);
+  // /signup-provider forwards here.
   {
     path: "/providers",
     element: <ProvidersLanding />,

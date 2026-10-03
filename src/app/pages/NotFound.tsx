@@ -48,10 +48,10 @@ export function NotFound() {
             <Button 
               size="lg"
               variant="outline"
-              onClick={() => navigate("/signup-consumer")}
+              onClick={() => navigate("/prices")}
               className="border-2 border-blue-600 text-blue-600 hover:bg-blue-50"
             >
-              Sign Up
+              Compare Prices
             </Button>
           </div>
         </div>

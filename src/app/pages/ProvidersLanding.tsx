@@ -17,6 +17,7 @@ import {
   Award,
   HeartHandshake,
 } from "lucide-react";
+import { ComingSoonBadge } from "../components/ComingSoonBadge";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
 /**
@@ -50,17 +51,19 @@ export function ProvidersLanding() {
     {
       icon: DollarSign,
       title: "Transparent Pricing",
-      description: "Set your own prices and showcase them upfront. Patients appreciate the transparency."
+      description: "Patients see the published insurer rates for your location. Letting you set and showcase your own prices is coming soon.",
+      soon: true
     },
     {
       icon: Calendar,
       title: "Patient Appointment Requests",
-      description: "Coming soon: patients who find your real price will be able to request an appointment, landing in your dashboard to follow up on. Not live yet."
+      description: "Patients who find your real price will be able to request an appointment, landing in your dashboard to follow up on. Not live yet.",
+      soon: true
     },
     {
       icon: TrendingUp,
       title: "Grow Your Practice",
-      description: "Build your reputation and increase patient volume through the platform."
+      description: "Build your reputation with patient reviews on your location's page."
     },
     {
       icon: Shield,
@@ -78,25 +81,27 @@ export function ProvidersLanding() {
     {
       step: "1",
       title: "Create Your Profile",
-      description: "Sign up and verify your credentials. Add your practice details, specialties, and availability.",
+      description: "Sign up, find your location in the price data and claim it. Add your practice name, phone number and a description.",
       icon: Stethoscope
     },
     {
       step: "2",
       title: "Set Your Pricing",
-      description: "List your services with transparent pricing. Patients can compare and choose what works for them.",
+      description: "Today patients see the published insurer rates for your location. Listing your own prices is not available yet.",
+      soon: true,
       icon: DollarSign
     },
     {
       step: "3",
-      title: "Appointment Requests (Coming Soon)",
+      title: "Appointment Requests",
       description: "Online appointment requests aren't live yet. Once they launch, patients will be able to ask to be seen and you'll follow up directly.",
+      soon: true,
       icon: Calendar
     },
     {
       step: "4",
       title: "Build Your Practice",
-      description: "Get paid on time and grow your patient base with our practice tools.",
+      description: "Keep your listing details current and watch patient reviews arrive on your page. Billing and practice tools are not built yet.",
       icon: TrendingUp
     }
   ];
@@ -105,22 +110,24 @@ export function ProvidersLanding() {
     {
       icon: BarChart3,
       title: "Practice Analytics",
-      description: "Track appointment volume, revenue, and patient trends with built-in analytics."
+      description: "Appointment volume and patient trends. Planned, not built yet.",
+      soon: true
     },
     {
       icon: Building2,
       title: "Multi-Location Support",
-      description: "Manage multiple office locations from a single dashboard."
+      description: "Claim and manage several office locations from one account."
     },
     {
       icon: Award,
       title: "Verified Credentials",
-      description: "Display your verified NPI and credentials to build trust."
+      description: "Showing a verified NPI and credentials on your listing. We don't independently verify credentials yet.",
+      soon: true
     },
     {
       icon: HeartHandshake,
       title: "Patient Reviews",
-      description: "Collect verified patient reviews once the platform supports them."
+      description: "Patients can leave reviews on your location's page. They aren't verified as real patients yet."
     }
   ];
 
@@ -167,8 +174,8 @@ export function ProvidersLanding() {
               Grow Your Practice with Starkwell
             </h1>
             <p className="text-xl md:text-2xl text-blue-100 mb-8">
-              Connect with patients through transparent pricing, streamlined scheduling, and
-              practice management tools built for Utah healthcare providers.
+              Put your practice in front of patients who are comparing real Utah prices. Claim
+              your listing today; scheduling and practice tools are coming soon.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
@@ -200,7 +207,7 @@ export function ProvidersLanding() {
               Why Join Starkwell?
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Everything you need to attract patients, manage your practice, and grow your revenue.
+              Claim your listing and get found by patients comparing real Utah prices.
             </p>
           </div>
 
@@ -211,7 +218,7 @@ export function ProvidersLanding() {
                   <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
                     <benefit.icon className="size-6 text-blue-600" />
                   </div>
-                  <CardTitle className="text-xl">{benefit.title}</CardTitle>
+                  <CardTitle className="text-xl">{benefit.title}{benefit.soon && <> <ComingSoonBadge /></>}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-600">{benefit.description}</p>
@@ -248,7 +255,7 @@ export function ProvidersLanding() {
                       </div>
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-3">
-                      {item.title}
+                      {item.title}{item.soon && <> <ComingSoonBadge /></>}
                     </h3>
                     <p className="text-gray-600">
                       {item.description}
@@ -274,7 +281,7 @@ export function ProvidersLanding() {
               Powerful Features for Your Practice
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Tools designed to help you succeed and provide better patient care.
+              What you can use today, and what we&rsquo;re building.
             </p>
           </div>
 
@@ -285,7 +292,7 @@ export function ProvidersLanding() {
                   <feature.icon className="size-8 text-blue-600" />
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">
-                  {feature.title}
+                  {feature.title}{feature.soon && <> <ComingSoonBadge /></>}
                 </h3>
                 <p className="text-gray-600">
                   {feature.description}
@@ -305,7 +312,7 @@ export function ProvidersLanding() {
                 Simple, Transparent Pricing
               </h2>
               <p className="text-xl text-gray-600">
-                No hidden fees. No long-term contracts. Cancel anytime.
+                Free to join today. We&rsquo;ll tell you before anything paid is introduced.
               </p>
             </div>
 
@@ -313,7 +320,7 @@ export function ProvidersLanding() {
               <CardContent className="p-8">
                 <div className="text-center mb-8">
                   <div className="text-5xl font-bold text-blue-600 mb-2">Free to Join</div>
-                  <p className="text-xl text-gray-600">Pay only when you get patients</p>
+                  <p className="text-xl text-gray-600">No fees of any kind today</p>
                 </div>
 
                 <div className="space-y-4 mb-8">
@@ -321,21 +328,21 @@ export function ProvidersLanding() {
                     <CheckCircle className="size-6 text-blue-600 shrink-0 mt-0.5" />
                     <div>
                       <div className="font-semibold text-gray-900">No Monthly Fees</div>
-                      <div className="text-gray-600">Create your profile and list services at no cost</div>
+                      <div className="text-gray-600">Claim your listing and add your practice details at no cost</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <CheckCircle className="size-6 text-blue-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-gray-900">You Set Your Prices</div>
-                      <div className="text-gray-600">Full control over your pricing and services</div>
+                      <div className="font-semibold text-gray-900">You Set Your Prices <ComingSoonBadge /></div>
+                      <div className="text-gray-600">Today, patients see the insurer-published rates for your location</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-blue-100 rounded-lg p-4 text-center">
                   <p className="text-gray-700">
-                    <span className="font-semibold">Questions about pricing?</span> Contact our team for a custom quote for enterprise practices.
+                    <span className="font-semibold">Questions?</span> Email provider-support@starkwell.com.
                   </p>
                 </div>
               </CardContent>
@@ -352,7 +359,7 @@ export function ProvidersLanding() {
               Ready to Grow Your Practice?
             </h2>
             <p className="text-xl text-blue-100 mb-8">
-              Join Starkwell to connect with patients and streamline your practice.
+              Claim your listing and get found by patients comparing real prices.
             </p>
             <Button
               size="lg"

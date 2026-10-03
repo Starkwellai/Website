@@ -39,7 +39,7 @@ interface Props {
 }
 
 export function SiteNav({ ctaTo = "/signup-consumer",
-                          ctaLabel = "Log In / Sign Up" }: Props) {
+                          ctaLabel = "Accounts: Coming Soon" }: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 

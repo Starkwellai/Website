@@ -26,6 +26,7 @@ import {
   SPECIALIST_CATEGORIES,
   type ProviderPrice,
 } from "../../lib/starkwell";
+import { AccountsNotLiveBanner } from "../components/AccountsNotLiveBanner";
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -202,6 +203,7 @@ export function Dashboard() {
 
       <div className="container mx-auto px-6 py-8">
         {/* Welcome Section */}
+        <AccountsNotLiveBanner />
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {userName}! 👋

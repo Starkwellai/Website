@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { useUser } from "../contexts/UserContext";
+import { AccountsNotLiveBanner } from "../components/AccountsNotLiveBanner";
 
 /**
  * Account settings page — form scaffolding, so mostly brought in as-is.
@@ -183,6 +184,7 @@ export function Settings() {
       </header>
 
       <div className="container mx-auto px-4 md:px-6 py-6 md:py-8">
+        <AccountsNotLiveBanner />
         <div className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
             <div>

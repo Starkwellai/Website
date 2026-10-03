@@ -7,7 +7,6 @@ import {
 } from "../../lib/starkwell";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Search, MapPin, Stethoscope, Eye, Smile, Scissors, Heart, Syringe, Activity, Clock, Award, ArrowRight, CheckCircle, DollarSign, FileText, Sparkles } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -18,12 +17,6 @@ export function Home() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [location, setLocation] = useState("");
-  const [providerFormData, setProviderFormData] = useState({
-    name: "",
-    practiceName: "",
-    specialty: "",
-    email: "",
-  });
 
   // `category` is the real backend category string to filter /prices by.
   // "Specialist" and "Elective Surgery" don't correspond to one category —
@@ -119,7 +112,7 @@ export function Home() {
               <span className="text-[#2563eb]">Know before you go.</span>
             </h1>
             <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-              Stop overpaying for care you couldn't compare. Starkwell shows you real prices from verified Utah providers — so you can choose confidently and book in minutes.
+              Stop overpaying for care you couldn't compare. Starkwell shows you the real prices Utah providers have agreed to with insurers — so you can choose confidently before you call.
             </p>
 
             {/* Search Bar */}
@@ -196,10 +189,10 @@ export function Home() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button 
                 size="lg"
-                onClick={() => navigate("/signup-consumer")}
+                onClick={() => navigate("/prices")}
                 className="bg-blue-600 hover:bg-blue-700 text-lg px-8"
               >
-                Find Care Near You
+                Compare Prices
                 <ArrowRight className="ml-2 size-5" />
               </Button>
               <Button 
@@ -562,7 +555,7 @@ export function Home() {
               <div className="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">1</div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">Search</h3>
               <p className="text-gray-600">
-                Find providers near you. Filter by specialty, location, availability, and insurance.
+                Search for a procedure, filter by city and insurance carrier, and see every Utah location that has a published price.
               </p>
             </div>
 
@@ -572,7 +565,7 @@ export function Home() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">Compare</h3>
               <p className="text-gray-600">
-                See real prices, read reviews, and compare providers side-by-side to find the best fit.
+                See real prices and patient reviews, and compare locations side by side in one list.
               </p>
             </div>
 
@@ -590,10 +583,10 @@ export function Home() {
           <div className="text-center mt-12">
             <Button 
               size="lg"
-              onClick={() => navigate("/signup-consumer")}
+              onClick={() => navigate("/prices")}
               className="bg-blue-600 hover:bg-blue-700 text-lg px-8"
             >
-              Get Started
+              Compare Prices
               <ArrowRight className="ml-2 size-5" />
             </Button>
           </div>
@@ -665,15 +658,15 @@ export function Home() {
                   <li className="flex items-start gap-3">
                     <CheckCircle className="size-6 text-green-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-lg">No phone tag</div>
-                      <div className="text-blue-100 text-sm">Patients see your price before they ever call</div>
+                      <div className="font-semibold text-lg">Fewer surprises on the phone</div>
+                      <div className="text-blue-100 text-sm">Patients see the published rates for your location before they call</div>
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="size-6 text-green-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <div className="font-semibold text-lg">Compete on quality</div>
-                      <div className="text-blue-100 text-sm">Showcase your expertise and patient reviews</div>
+                      <div className="text-blue-100 text-sm">Add your practice details to your listing; patient reviews appear on your page</div>
                     </div>
                   </li>
                 </ul>
@@ -684,90 +677,21 @@ export function Home() {
                 <h3 className="text-2xl font-bold text-gray-900 mb-6">
                   Join as a Provider
                 </h3>
-                <form className="space-y-5" onSubmit={(e) => {
-                  e.preventDefault();
-                  navigate("/signup-provider");
-                }}>
-                  <div>
-                    <Label htmlFor="provider-name" className="text-gray-700 font-medium">
-                      Name *
-                    </Label>
-                    <Input
-                      id="provider-name"
-                      type="text"
-                      placeholder="Dr. Jane Smith"
-                      value={providerFormData.name}
-                      onChange={(e) => setProviderFormData({ ...providerFormData, name: e.target.value })}
-                      className="mt-1.5 h-12"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="practice-name" className="text-gray-700 font-medium">
-                      Practice Name *
-                    </Label>
-                    <Input
-                      id="practice-name"
-                      type="text"
-                      placeholder="Smith Family Practice"
-                      value={providerFormData.practiceName}
-                      onChange={(e) => setProviderFormData({ ...providerFormData, practiceName: e.target.value })}
-                      className="mt-1.5 h-12"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="specialty" className="text-gray-700 font-medium">
-                      Specialty *
-                    </Label>
-                    <select
-                      id="specialty"
-                      value={providerFormData.specialty}
-                      onChange={(e) => setProviderFormData({ ...providerFormData, specialty: e.target.value })}
-                      className="mt-1.5 w-full h-12 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    >
-                      <option value="">Select specialty</option>
-                      <option value="primary-care">Primary Care</option>
-                      <option value="cardiology">Cardiology</option>
-                      <option value="dermatology">Dermatology</option>
-                      <option value="orthopedics">Orthopedics</option>
-                      <option value="radiology">Radiology</option>
-                      <option value="dentistry">Dentistry</option>
-                      <option value="ophthalmology">Ophthalmology</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="provider-email" className="text-gray-700 font-medium">
-                      Email *
-                    </Label>
-                    <Input
-                      id="provider-email"
-                      type="email"
-                      placeholder="jane@smithpractice.com"
-                      value={providerFormData.email}
-                      onChange={(e) => setProviderFormData({ ...providerFormData, email: e.target.value })}
-                      className="mt-1.5 h-12"
-                      required
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-semibold"
-                  >
-                    Join as a Provider
-                    <ArrowRight className="ml-2 size-5" />
-                  </Button>
-
-                  <p className="text-sm text-gray-500 text-center">
-                    By signing up, you agree to our Terms of Service and Privacy Policy
-                  </p>
-                </form>
+                <p className="text-gray-600 mb-6">
+                  Find your location in the price data, claim it, and add your practice&rsquo;s
+                  name, phone number and description to its public page. Free today.
+                </p>
+                <Button
+                  onClick={() => navigate("/provider-signup")}
+                  className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-semibold"
+                >
+                  Claim your listing
+                  <ArrowRight className="ml-2 size-5" />
+                </Button>
+                <p className="text-sm text-gray-500 text-center mt-4">
+                  Claims aren&rsquo;t independently verified yet &mdash; verification is coming soon. Setting your own prices and online
+                  scheduling are coming soon.
+                </p>
               </div>
             </div>
           </div>
@@ -791,10 +715,10 @@ export function Home() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button 
                 size="lg"
-                onClick={() => navigate("/signup-consumer")}
+                onClick={() => navigate("/prices")}
                 className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8"
               >
-                Find Care Near You
+                Compare Prices
                 <ArrowRight className="ml-2 size-5" />
               </Button>
               <Button 
@@ -828,21 +752,17 @@ export function Home() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-3">For Patients</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-600">Find a Doctor</a></li>
-                <li><a href="#" className="hover:text-blue-600">Compare Prices</a></li>
                 <li><button onClick={() => navigate("/prices")} className="hover:text-blue-600">Compare Prices</button></li>
                 <li><button onClick={() => navigate("/subscription-tiers")} className="hover:text-blue-600">Subscription Tiers</button></li>
-                <li><a href="#" className="hover:text-blue-600">Patient Resources</a></li>
+                <li><a href="/help" className="hover:text-blue-600">Patient Resources</a></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold text-gray-900 mb-3">For Providers</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-blue-600">Join Starkwell</a></li>
-                <li><a href="#" className="hover:text-blue-600">Provider Portal</a></li>
-                <li><a href="#" className="hover:text-blue-600">Resources</a></li>
-                <li><a href="#" className="hover:text-blue-600">Contact Sales</a></li>
+                <li><a href="/providers" className="hover:text-blue-600">Join Starkwell</a></li>
+                <li><a href="/provider-dashboard" className="hover:text-blue-600">Provider Portal</a></li>
               </ul>
             </div>
 
@@ -850,8 +770,8 @@ export function Home() {
               <h4 className="font-semibold text-gray-900 mb-3">Locations</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/utah")} className="hover:text-blue-600">Utah Hub</button></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Arizona</a></li>
-                <li><a href="#" className="hover:text-blue-600 text-gray-500">Coming Soon: Nevada</a></li>
+                <li><span className="text-gray-500">Coming Soon: Arizona</span></li>
+                <li><span className="text-gray-500">Coming Soon: Nevada</span></li>
               </ul>
             </div>
 
@@ -860,8 +780,7 @@ export function Home() {
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><button onClick={() => navigate("/about")} className="hover:text-blue-600">About</button></li>
                 <li><button onClick={() => navigate("/trust")} className="hover:text-blue-600">Trust & Safety</button></li>
-                <li><a href="#" className="hover:text-blue-600">Careers</a></li>
-                <li><a href="#" className="hover:text-blue-600">Contact</a></li>
+                <li><a href="mailto:support@starkwell.com" className="hover:text-blue-600">Contact</a></li>
               </ul>
             </div>
 
