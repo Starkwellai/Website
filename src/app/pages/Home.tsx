@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import {
-  searchServices, getFacilities, formatPrice,
+  searchServices, getFacilities, formatPrice, health,
   SPECIALIST_CATEGORIES, ELECTIVE_SURGERY_KEYS,
   type Facility,
 } from "../../lib/starkwell";
@@ -39,6 +39,15 @@ export function Home() {
   // quietly stale. Restricted to CMS-named facilities with enough providers to
   // have a meaningful median — a recognisable hospital name is the point here.
   const [demo, setDemo] = useState<Facility[]>([]);
+  // Cheapest and dearest CMS-named hospital for a knee MRI, from the same
+  // fetch as `demo`, so the prose below can't drift from the cards above it.
+  const [spread, setSpread] = useState<{ lo: Facility; hi: Facility; count: number } | null>(null);
+  // Live catalog size. The fallbacks are the values measured 2026-10-05 and
+  // only show if /api/health can't be reached; they are not the source.
+  const [counts, setCounts] = useState({ providers: 31841, services: 752, records: 23641409 });
+  useEffect(() => {
+    health().then(h => setCounts({ providers: h.providers, services: h.services, records: h.n })).catch(() => {});
+  }, []);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -62,9 +71,12 @@ export function Home() {
           seen.add(key);
           return true;
         });
-        if (!cancelled) setDemo(unique);
+        if (!cancelled) {
+          setDemo(unique);
+          setSpread({ lo: named[0], hi: named[named.length - 1], count: named.length });
+        }
       } catch {
-        if (!cancelled) setDemo([]);   // section hides itself
+        if (!cancelled) { setDemo([]); setSpread(null); }   // sections hide their numbers
       }
     })();
     return () => { cancelled = true; };
@@ -157,12 +169,14 @@ export function Home() {
                 IS measured: median ratio of the 90th to 10th percentile
                 like-for-like price (same billing component, not mixing
                 professional and facility fees), across procedures with 50+
-                providers. Recomputed 2026-09-10 against the current catalog:
-                620 qualifying procedures (was 166), median ratio 2.7x (was
-                2.0x) — the catalog grew to cover far more high-variance
+                providers. Recomputed 2026-10-05 against the current catalog:
+                751 qualifying procedures (was 620), median ratio 2.6x (was
+                2.7x) — the catalog grew to cover far more high-variance
                 specialty procedures, which widened the typical gap. */}
             <p className="text-sm text-teal-600 mb-8">
-              ✦ A knee MRI is $212 at one Utah hospital and $382 at another — see what yours costs
+              {spread
+                ? <>✦ A knee MRI is {formatPrice(spread.lo.median_price)} at one Utah hospital and {formatPrice(spread.hi.median_price)} at another — see what yours costs</>
+                : <>✦ The same procedure can cost very different amounts at different Utah locations — see what yours costs</>}
             </p>
 
             {/* Trust Indicators */}
@@ -222,16 +236,16 @@ export function Home() {
               claim, not a measurement of this dataset. */}
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center border-r border-gray-200 last:border-r-0">
-              <div className="text-[30px] font-bold text-[#2563eb] mb-1">31,620</div>
+              <div className="text-[30px] font-bold text-[#2563eb] mb-1">{counts.providers.toLocaleString()}</div>
               <div className="text-[13px] text-gray-600">Utah providers priced</div>
             </div>
             <div className="text-center border-r border-gray-200 last:border-r-0">
-              <div className="text-[30px] font-bold text-[#2563eb] mb-1">2.7&times;</div>
+              <div className="text-[30px] font-bold text-[#2563eb] mb-1">2.6&times;</div>
               <div className="text-[13px] text-gray-600 mb-1">Price gap for the same procedure</div>
-              <div className="text-[10px] text-[#9ca3af]">Middle 80% of providers, 620 procedures</div>
+              <div className="text-[10px] text-[#9ca3af]">Middle 80% of providers, {counts.services - 1} procedures</div>
             </div>
             <div className="text-center border-r border-gray-200 last:border-r-0">
-              <div className="text-[30px] font-bold text-[#2563eb] mb-1">229</div>
+              <div className="text-[30px] font-bold text-[#2563eb] mb-1">232</div>
               <div className="text-[13px] text-gray-600">Utah cities covered</div>
             </div>
             <div className="text-center">
@@ -397,10 +411,16 @@ export function Home() {
                   <div>
                     <h4 className="font-bold text-lg mb-2 text-white">What the spread means</h4>
                     <p className="text-blue-100 text-base">
-                      The same knee MRI is <span className="font-bold text-white">$212</span> at
-                      University of Utah Hospital and <span className="font-bold text-white">$382</span> at
-                      Intermountain Layton — a <span className="font-bold text-white">$170</span> difference
-                      for the same scan. Prices come from insurers' published rate files.
+                      {spread ? (
+                        <>
+                          The same knee MRI is <span className="font-bold text-white">{formatPrice(spread.lo.median_price)}</span> at{" "}
+                          {spread.lo.facility_name} and <span className="font-bold text-white">{formatPrice(spread.hi.median_price)}</span> at{" "}
+                          {spread.hi.facility_name} — a{" "}
+                          <span className="font-bold text-white">{formatPrice(spread.hi.median_price - spread.lo.median_price)}</span> difference
+                          for the same scan.{" "}
+                        </>
+                      ) : null}
+                      Prices come from insurers' published rate files.
                     </p>
                   </div>
                 </div>
@@ -470,21 +490,31 @@ export function Home() {
                 <p className="text-sm font-semibold uppercase tracking-wide text-teal-700 mb-3">
                   The same scan, two prices
                 </p>
-                <p className="text-gray-700 text-base leading-relaxed">
-                  A knee MRI costs{" "}
-                  <span className="font-semibold text-gray-900">$212</span> at University of
-                  Utah Hospital and <span className="font-semibold text-gray-900">$382</span> at
-                  Intermountain Layton — the same scan, 31 named hospitals apart.
-                </p>
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-100">
-                  <div>
-                    <div className="font-semibold text-gray-900">31 hospitals</div>
-                    <div className="text-sm text-gray-600">compared like-for-like</div>
-                  </div>
-                  <div className="bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-semibold">
-                    $170 apart
-                  </div>
-                </div>
+                {spread ? (
+                  <>
+                    <p className="text-gray-700 text-base leading-relaxed">
+                      A knee MRI costs{" "}
+                      <span className="font-semibold text-gray-900">{formatPrice(spread.lo.median_price)}</span> at{" "}
+                      {spread.lo.facility_name} and{" "}
+                      <span className="font-semibold text-gray-900">{formatPrice(spread.hi.median_price)}</span> at{" "}
+                      {spread.hi.facility_name} — the same scan, {spread.count} named hospitals compared.
+                    </p>
+                    <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-100">
+                      <div>
+                        <div className="font-semibold text-gray-900">{spread.count} hospitals</div>
+                        <div className="text-sm text-gray-600">compared like-for-like</div>
+                      </div>
+                      <div className="bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-semibold">
+                        {formatPrice(spread.hi.median_price - spread.lo.median_price)} apart
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-gray-700 text-base leading-relaxed">
+                    The same scan can cost very different amounts at different Utah hospitals. Search a
+                    procedure to see the spread for yourself.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -501,8 +531,8 @@ export function Home() {
                 </p>
                 <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-100">
                   <div>
-                    <div className="font-semibold text-gray-900">5.9 million prices</div>
-                    <div className="text-sm text-gray-600">across 620 procedures</div>
+                    <div className="font-semibold text-gray-900">{(Math.floor(counts.records / 100000) / 10).toFixed(1)} million price records</div>
+                    <div className="text-sm text-gray-600">across {counts.services.toLocaleString()} procedures</div>
                   </div>
                   <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap">
                     Published rates
@@ -518,17 +548,17 @@ export function Home() {
               source: there are no ratings, no users and no recorded savings. */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 text-center max-w-4xl mx-auto">
             <div className="text-gray-700">
-              <span className="text-2xl font-bold text-gray-900">31,620</span>
+              <span className="text-2xl font-bold text-gray-900">{counts.providers.toLocaleString()}</span>
               <span className="ml-2 text-base">providers priced</span>
             </div>
             <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
             <div className="text-gray-700">
-              <span className="text-2xl font-bold text-gray-900">620</span>
+              <span className="text-2xl font-bold text-gray-900">{counts.services.toLocaleString()}</span>
               <span className="ml-2 text-base">procedures covered</span>
             </div>
             <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
             <div className="text-gray-700">
-              <span className="text-2xl font-bold text-gray-900">229</span>
+              <span className="text-2xl font-bold text-gray-900">232</span>
               <span className="ml-2 text-base">Utah cities</span>
             </div>
           </div>

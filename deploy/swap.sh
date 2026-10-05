@@ -8,7 +8,7 @@
 set -euo pipefail
 
 CANARY_PORT=8081
-TIMEOUT_S=240   # the documented ~2-3 min cold-start window, plus margin
+TIMEOUT_S=360   # cold start measured at ~215-235s on 2026-10; was 240, too close to the limit
 
 echo "Starting canary on port $CANARY_PORT..."
 docker rm -f starkwell-canary >/dev/null 2>&1 || true
