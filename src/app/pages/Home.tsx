@@ -54,7 +54,7 @@ export function Home() {
       try {
         const svcs = await searchServices("MRI knee", { limit: 1 });
         if (!svcs.length) return;
-        const all = await getFacilities(svcs[0].service_key, { limit: 60 });
+        const all = await getFacilities(svcs[0].service_key, { limit: 200, namedOnly: true });
         const named = all
           .filter(f => f.name_source === "cms" && f.providers >= 10)
           .sort((a, b) => a.median_price - b.median_price);
