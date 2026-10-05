@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../co
 import { Search, MapPin, Stethoscope, Eye, Smile, Scissors, Heart, Syringe, Activity, Clock, Award, ArrowRight, CheckCircle, DollarSign, FileText, Sparkles } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { SiteNav } from "../components/SiteNav";
+import { ComingSoonBadge } from "../components/ComingSoonBadge";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
 export function Home() {
@@ -30,7 +31,7 @@ export function Home() {
     { name: "Specialist", icon: Activity, color: "bg-purple-100 text-purple-600", category: null, categories: SPECIALIST_CATEGORIES, keys: null },
     { name: "Dental", icon: Smile, color: "bg-green-100 text-green-600", category: "Dental", categories: null, keys: null },
     { name: "Vision", icon: Eye, color: "bg-amber-100 text-amber-600", category: "Vision", categories: null, keys: null },
-    { name: "Beauty & Aesthetics", icon: Scissors, color: "bg-pink-100 text-pink-600", category: null, categories: null, keys: null },
+    { name: "Beauty & Aesthetics", icon: Scissors, color: "bg-pink-100 text-pink-600", category: null, categories: null, keys: null, comingSoon: true },
     { name: "Elective Surgery", icon: Syringe, color: "bg-indigo-100 text-indigo-600", category: null, categories: null, keys: ELECTIVE_SURGERY_KEYS },
   ];
 
@@ -237,7 +238,7 @@ export function Home() {
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center border-r border-gray-200 last:border-r-0">
               <div className="text-[30px] font-bold text-[#2563eb] mb-1">{counts.providers.toLocaleString()}</div>
-              <div className="text-[13px] text-gray-600">Utah providers priced</div>
+              <div className="text-[13px] text-gray-600">Utah providers with an insurer-published rate</div>
             </div>
             <div className="text-center border-r border-gray-200 last:border-r-0">
               <div className="text-[30px] font-bold text-[#2563eb] mb-1">2.6&times;</div>
@@ -375,7 +376,7 @@ export function Home() {
                           {f.city.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase())}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {f.providers} providers &middot;{" "}
+                          {f.providers} contracted providers &middot;{" "}
                           {formatPrice(f.low_price)}&ndash;{formatPrice(f.high_price)}
                         </div>
                         {saving > 0 ? (
@@ -442,6 +443,7 @@ export function Home() {
               return (
                 <button
                   key={category.name}
+                  disabled={category.comingSoon}
                   onClick={() => {
                     if (category.category) {
                       navigate(`/prices?category=${encodeURIComponent(category.category)}`);
@@ -453,7 +455,8 @@ export function Home() {
                       navigate("/prices");
                     }
                   }}
-                  className="group p-6 bg-[#cbcbcb] border border-gray-200 rounded-xl hover:shadow-lg hover:border-blue-300 transition-all text-center"
+                  className={`group p-6 bg-[#cbcbcb] border border-gray-200 rounded-xl text-center transition-all ${
+                    category.comingSoon ? "opacity-70 cursor-default" : "hover:shadow-lg hover:border-blue-300"}`}
                 >
                   <div className={`w-14 h-14 ${category.color} rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform`}>
                     <Icon className="size-7" />
@@ -461,6 +464,7 @@ export function Home() {
                   <h3 className="text-sm font-medium text-gray-900">
                     {category.name}
                   </h3>
+                  {category.comingSoon && <div className="mt-2"><ComingSoonBadge /></div>}
                 </button>
               );
             })}
@@ -549,7 +553,7 @@ export function Home() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 text-center max-w-4xl mx-auto">
             <div className="text-gray-700">
               <span className="text-2xl font-bold text-gray-900">{counts.providers.toLocaleString()}</span>
-              <span className="ml-2 text-base">providers priced</span>
+              <span className="ml-2 text-base">providers with a published rate</span>
             </div>
             <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
             <div className="text-gray-700">
@@ -562,6 +566,10 @@ export function Home() {
               <span className="ml-2 text-base">Utah cities</span>
             </div>
           </div>
+          <p className="text-center text-xs text-gray-500 mt-6 max-w-2xl mx-auto">
+            &ldquo;Providers&rdquo; counts everyone an insurer has published a rate for. Insurers list
+            every contracted provider, so many of them never perform a given procedure.
+          </p>
           <p className="text-center text-xs text-gray-500 mt-6">
             Source: insurer Transparency in Coverage disclosures, July 2026.
           </p>

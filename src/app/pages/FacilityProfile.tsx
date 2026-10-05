@@ -230,7 +230,7 @@ export function FacilityProfile() {
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900 truncate">{s.display_name}</p>
-                    <p className="text-xs text-gray-500">{s.category} · {s.providers} {s.providers === 1 ? "provider" : "providers"}</p>
+                    <p className="text-xs text-gray-500">{s.category} · {s.providers} contracted {s.providers === 1 ? "provider" : "providers"}</p>
                   </div>
                   <p className="font-semibold text-gray-900 shrink-0">{formatPrice(s.median_price)}</p>
                 </button>

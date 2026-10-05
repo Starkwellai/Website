@@ -644,7 +644,7 @@ export function PriceSearch() {
       key: `${f.address}|${f.city}`, label: facilityLabel(f), city: f.city,
       lat: f.lat, lng: f.lng, location_grade: f.location_grade,
       price: f.median_price,
-      detail: `${f.providers} providers · ${formatPrice(f.low_price)}–${formatPrice(f.high_price)}`,
+      detail: `${f.providers} contracted providers · ${formatPrice(f.low_price)}–${formatPrice(f.high_price)}`,
     }));
   }, [facility, providers, facilities]);
 
@@ -1051,7 +1051,7 @@ export function PriceSearch() {
                           </div>
                         </div>
                         <p className="mt-2 text-xs text-gray-500">
-                          {s.providers.toLocaleString()} providers ·{" "}
+                          {s.providers.toLocaleString()} contracted providers ·{" "}
                           typical {formatPrice(s.low_price)}–{formatPrice(s.high_price)}
                           <FullRangeInfo note={fullRangeNote(s.low_price_full, s.high_price_full)} />
                         </p>
@@ -1428,8 +1428,10 @@ export function PriceSearch() {
                   ) : (
                     <p>
                       Places are grouped by street address. The price shown is the{" "}
-                      <strong>median</strong> across everyone billing there, with the range
-                      beside it — one low price at a large campus is not the price of going.
+                      <strong>median</strong> across everyone with a published rate there, with the
+                      range beside it — one low price at a large campus is not the price of going.
+                      &ldquo;Contracted providers&rdquo; are everyone an insurer lists, including
+                      some who never perform this procedure.
                       Pick your insurance to see what <em>you</em> would pay.
                     </p>
                   )}
@@ -1502,7 +1504,7 @@ export function PriceSearch() {
                                 </p>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   <Badge variant="outline" className="bg-white text-gray-600">
-                                    {f.providers} {f.providers === 1 ? "provider" : "providers"}
+                                    {f.providers} contracted {f.providers === 1 ? "provider" : "providers"}
                                   </Badge>
                                   {f.distance_miles != null && (
                                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
