@@ -33,7 +33,7 @@ export function TermsAndConditions() {
           <Card className="shadow-lg border-blue-100">
             <CardHeader className="bg-blue-50 border-b border-blue-100">
               <CardTitle className="text-2xl text-blue-900">Terms and Conditions</CardTitle>
-              <p className="text-sm text-gray-600 mt-2">Last Updated: March 23, 2026</p>
+              <p className="text-sm text-gray-600 mt-2">Last Updated: October 5, 2026</p>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[600px] p-6">
@@ -51,7 +51,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">2. Use License</h2>
                     <p className="mb-3">
-                      Permission is granted to access and use Starkwell for personal, non-commercial healthcare management purposes. This license shall automatically terminate if you violate any of these restrictions.
+                      Permission is granted to access and use Starkwell for personal, non-commercial purposes, such as researching healthcare prices. This license shall automatically terminate if you violate any of these restrictions.
                     </p>
                     <p className="font-medium mb-2">You may not:</p>
                     <ul className="list-disc pl-6 space-y-1">
@@ -66,7 +66,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">3. User Account and Security</h2>
                     <p className="mb-3">
-                      You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to:
+                      You do not need an account to search prices. Today, accounts exist only for practices that register to claim a listing; patient accounts are not available yet. If you have an account, you are responsible for maintaining the confidentiality of your credentials and for all activities that occur under your account. You agree to:
                     </p>
                     <ul className="list-disc pl-6 space-y-1 mb-3">
                       <li>Provide accurate, current, and complete information during registration</li>
@@ -82,7 +82,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">4. Healthcare Information Disclaimer</h2>
                     <p className="mb-3">
-                      Starkwell is a tool for managing and organizing your healthcare information. It is not a substitute for professional medical advice, diagnosis, or treatment.
+                      Starkwell is a price-comparison tool. The prices it shows come from rate files that insurers and hospitals publish; they are not quotes, and your actual cost depends on your plan and the care you receive. Practice details on a claimed listing are provided by whoever claimed it and are not independently verified by Starkwell. Starkwell is not a substitute for professional medical advice, diagnosis, or treatment, and it does not book appointments, sell insurance, or process payments.
                     </p>
                     <p className="mb-3 font-medium text-blue-900">
                       Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of something you have read on this Service.

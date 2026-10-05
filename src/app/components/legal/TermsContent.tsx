@@ -4,7 +4,7 @@ export function TermsContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">1. Acceptance of Terms</h2>
         <p className="mb-3">
-          By accessing and using Starkwell (\"the Service\"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+          By accessing and using Starkwell (&ldquo;the Service&rdquo;), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
         </p>
         <p>
           These Terms and Conditions constitute a legally binding agreement between you and Starkwell regarding your use of the Service.
@@ -14,10 +14,10 @@ export function TermsContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">2. Description of Service</h2>
         <p className="mb-3">
-          Starkwell provides an AI-powered healthcare marketplace and navigation platform that helps patients find care, compare prices across providers, book appointments, and understand their medical results in plain language.
+          Starkwell is a healthcare price-comparison service for Utah. It lets you search for a procedure and see the prices insurers have published for it, compare locations, read patient reviews, and look up hospital-stay and drug prices. Practices can claim their location and add contact details and a description to its public page. The service also offers AI-assisted search that matches a plain-language description to procedures in our catalog.
         </p>
         <p className="mb-3">
-          The Service is designed to facilitate connections between healthcare consumers and providers, offering transparent pricing information and simplified healthcare navigation tools.
+          Starkwell does not provide healthcare, sell insurance, book appointments, or process payments. Some features are planned but not available today, including patient accounts, online appointment requests, paid plans, and verification of practices and credentials. Where the Service describes a feature as &ldquo;coming soon,&rdquo; it does not exist yet.
         </p>
         <p>
           We reserve the right to modify, suspend, or discontinue any aspect of the Service at any time without prior notice.
@@ -27,7 +27,7 @@ export function TermsContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">3. User Accounts and Registration</h2>
         <p className="mb-3">
-          To access certain features of the Service, you must register for an account. You agree to provide accurate, current, and complete information during the registration process and to update such information to keep it accurate, current, and complete.
+          You do not need an account to search prices. Today, accounts exist only for practices that register to claim a listing; patient accounts are not available yet. If you register, you agree to provide accurate, current, and complete information and to keep it up to date.
         </p>
         <p className="mb-3">
           You are responsible for safeguarding your password and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.
@@ -60,7 +60,7 @@ export function TermsContent() {
           Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of information you have read on the Service.
         </p>
         <p>
-          Pricing information displayed on the Service is provided by healthcare providers and is subject to change. We strive to ensure accuracy but cannot guarantee that all pricing information is current or complete.
+          Prices shown on the Service come from the machine-readable rate files that insurers and hospitals publish, and they are not quotes. Your actual cost depends on your plan, your deductible, and the services you receive, and the rates change. We try to be accurate but cannot guarantee that any price is current or complete. Practice details on a claimed listing are provided by whoever claimed it and are not independently verified by Starkwell.
         </p>
       </section>
 
@@ -87,13 +87,13 @@ export function TermsContent() {
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">8. Payment and Billing</h2>
         <p className="mb-3">
-          Some features of the Service may require payment of fees. You agree to pay all fees associated with your use of such features. All fees are non-refundable unless otherwise stated.
+          The Service is free to use today and we charge no fees. We may introduce paid features in the future; none exist now.
         </p>
         <p className="mb-3">
-          We reserve the right to change our fees at any time. If we change our fees, we will provide notice of the change on the Service or via email at least 30 days before the change takes effect.
+          If we introduce paid features, we will publish the price and terms for them before anyone is charged, and you will not be charged for anything without agreeing to it first. We will give at least 30 days&rsquo; notice of any fee that applies to a feature you already use.
         </p>
         <p>
-          Subscription tiers (Free, Standard, and Elite) provide different levels of access to Service features. You may upgrade or downgrade your subscription at any time, with changes taking effect at the start of the next billing cycle.
+          The plans page describes paid plans we are considering. They are not available, nothing can be purchased, and their features and prices may change or never launch.
         </p>
       </section>
 
