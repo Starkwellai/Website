@@ -221,6 +221,24 @@ the site shows "not live yet" until `STARKWELL_APPOINTMENT_REQUESTS=1` is added
 to `/root/starkwell.env`. Don't turn it on until provider claims are verified
 and the site is on https (requests carry a patient's name and phone number).
 
+## Backups of the data that exists nowhere else
+
+Provider accounts, claimed listings, reviews and the activity logs live only in
+`/root/starkwell-data` on the droplet; everything else can be rebuilt. A daily
+cron job (03:30 UTC) copies them to `/root/starkwell-backups/<date>/` using
+SQLite's own backup call, integrity-checks every copy, and keeps 14 days.
+Set up once with `bash deploy/install_backup.sh` (already done on 2026-10-05;
+safe to re-run). Check `/root/starkwell-backups/backup.log`: each night should
+add one "backup ok" line, and a failed integrity check logs "BACKUP FAILED".
+
+Restore: stop the container, copy the dated `*.db` files back into
+`/root/starkwell-data/`, start it again.
+
+**Limit:** the backups sit on the same disk as the data, so they protect against
+corruption, a bad deploy or an accidental delete, but not against losing the
+droplet. For that, turn on DigitalOcean droplet backups (about 20% of the
+droplet price) or copy `/root/starkwell-backups` off the server.
+
 ## 6. Optional, later, still cheap
 
 - **A real domain + HTTPS**: a domain costs ~$10-15/year, and
