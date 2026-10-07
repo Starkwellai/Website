@@ -33,7 +33,7 @@ export function TermsAndConditions() {
           <Card className="shadow-lg border-blue-100">
             <CardHeader className="bg-blue-50 border-b border-blue-100">
               <CardTitle className="text-2xl text-blue-900">Terms and Conditions</CardTitle>
-              <p className="text-sm text-gray-600 mt-2">Last Updated: October 5, 2026</p>
+              <p className="text-sm text-gray-600 mt-2">Last Updated: October 7, 2026</p>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[600px] p-6">
@@ -110,9 +110,10 @@ export function TermsAndConditions() {
                     <ul className="list-disc pl-6 space-y-1 mb-3">
                       <li>Provider accounts can only see their own claimed listings and requests</li>
                       <li>We never sell your data, and never share it without consent</li>
+                      <li>Connections between your browser and this site are encrypted with HTTPS</li>
                     </ul>
                     <p className="mb-3">
-                      <em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest,
+                      <em>Not yet in place:</em> encryption at rest,
                       regular security audits, and formal backup/disaster-recovery procedures.
                       However, no method of transmission over the Internet or electronic storage is
                       ever 100% secure, even once those safeguards are added — we cannot guarantee

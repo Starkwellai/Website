@@ -99,11 +99,11 @@ export function Trust() {
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-700">Every provider checked against the federal NPI registry</span>
+                  <span className="text-gray-700">Every provider in our price data is matched to the federal NPI registry</span>
                 </div>
                 <div className="flex items-start gap-3">
-                  <BadgeCheck className="size-6 text-gray-400 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-500">HTTPS encryption in transit — coming soon, not live yet</span>
+                  <CheckCircle className="size-6 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span className="text-gray-700">HTTPS: connections between your browser and this site are encrypted</span>
                 </div>
                 <div className="flex items-start gap-3">
                   <BadgeCheck className="size-6 text-gray-400 flex-shrink-0 mt-0.5" />

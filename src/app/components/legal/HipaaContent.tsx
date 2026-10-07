@@ -220,7 +220,8 @@ export function HipaaContent() {
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Providers can only see their own claimed listings and the appointment requests sent to them</li>
           <li>We never sell your data, and never share it without consent</li>
-          <li><em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest, formal workforce training, regular third-party security audits, and a written incident-response/breach-notification procedure</li>
+          <li>Connections between your browser and this site are encrypted with HTTPS</li>
+          <li><em>Not yet in place:</em> encryption at rest, formal workforce training, regular third-party security audits, and a written incident-response/breach-notification procedure</li>
         </ul>
         <p>
           We're building toward all of the above rather than claiming it's finished.

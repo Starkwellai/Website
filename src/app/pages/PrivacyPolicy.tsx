@@ -43,7 +43,7 @@ export function PrivacyPolicy() {
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mt-4">Last Updated: March 23, 2026</p>
+              <p className="text-sm text-gray-600 mt-4">Last Updated: October 7, 2026</p>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[600px] p-6">
@@ -275,13 +275,13 @@ export function PrivacyPolicy() {
                           <li>• Providers can only see their own claimed listings and requests</li>
                           <li>• We never sell your data, and never share it without consent</li>
                           <li>• Passwordless accounts — no password to leak, by design</li>
+                          <li>• HTTPS (encryption in transit between your browser and this site)</li>
                         </ul>
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <h4 className="font-semibold text-blue-800 mb-2">Not yet in place</h4>
                         <ul className="text-sm space-y-1">
-                          <li>• HTTPS (encryption in transit)</li>
                           <li>• Encryption at rest</li>
                           <li>• Multi-factor authentication</li>
                           <li>• Third-party security audits and monitoring</li>

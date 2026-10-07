@@ -110,9 +110,10 @@ export function PrivacyContent() {
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Provider accounts can only see their own claimed listings and the requests sent to them</li>
           <li>We never sell your data, and never share it without consent</li>
+          <li>Connections between your browser and this site are encrypted with HTTPS</li>
         </ul>
         <p className="mb-3">
-          <em>Not yet in place:</em> encryption in transit (HTTPS), encryption at rest, regular
+          <em>Not yet in place:</em> encryption at rest, regular
           third-party security audits, and formal HIPAA-compliant infrastructure — these are real
           work we're building toward, not something already true. However, no method of
           transmission over the Internet or electronic storage is ever 100% secure, even once

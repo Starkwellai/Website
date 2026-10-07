@@ -5,14 +5,20 @@
 # (the straight-line rm-then-run sequence it replaces caused a real outage
 # on 2026-09-16 when `docker run` failed after the old container was
 # already gone).
+#
+# Caddy (HTTPS) owns ports 80/443 on this machine and forwards to the app on
+# 127.0.0.1:8080. The containers publish ONLY to 127.0.0.1, so the app is not
+# reachable except through Caddy. Do not change `-p 127.0.0.1:...` back to a
+# public port: it would collide with Caddy and bypass HTTPS.
 set -euo pipefail
 
 CANARY_PORT=8081
+PROD_PORT=8080
 TIMEOUT_S=360   # cold start measured at ~215-235s on 2026-10; was 240, too close to the limit
 
 echo "Starting canary on port $CANARY_PORT..."
 docker rm -f starkwell-canary >/dev/null 2>&1 || true
-docker run -d --name starkwell-canary -p "$CANARY_PORT:8080" --memory=1400m \
+docker run -d --name starkwell-canary -p "127.0.0.1:$CANARY_PORT:8080" --memory=1400m \
   --env-file /root/starkwell.env \
   -v /root/starkwell-data:/app/data-writable starkwell:new
 
@@ -33,13 +39,13 @@ echo "Canary healthy after ${elapsed}s. Swapping into production..."
 docker rm -f starkwell-canary
 docker tag starkwell:latest "starkwell:rollback-$(date +%Y%m%d-%H%M)" 2>/dev/null || true
 docker rm -f starkwell
-docker run -d --name starkwell --restart unless-stopped -p 80:8080 --memory=1400m \
+docker run -d --name starkwell --restart unless-stopped -p "127.0.0.1:$PROD_PORT:8080" --memory=1400m \
   --env-file /root/starkwell.env \
   -v /root/starkwell-data:/app/data-writable starkwell:new
 docker tag starkwell:new starkwell:latest
 
-echo "Waiting for production to answer on port 80..."
-until curl -sf "http://localhost/api/health" >/dev/null 2>&1; do sleep 5; done
+echo "Waiting for production to answer on 127.0.0.1:$PROD_PORT..."
+until curl -sf "http://127.0.0.1:$PROD_PORT/api/health" >/dev/null 2>&1; do sleep 5; done
 echo "Live and healthy."
 
 # Keep only the newest few rollback images. Every swap tags the previous image

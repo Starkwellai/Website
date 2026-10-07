@@ -210,12 +210,13 @@ export function HipaaPrivacy() {
                           <li>• Providers only see their own claimed listings and requests</li>
                           <li>• We never sell your data, and never share it without consent</li>
                           <li>• Passwordless accounts — no password to leak, by design</li>
+                          <li>• HTTPS (encryption in transit between your browser and this site)</li>
                         </ul>
                       </div>
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <h4 className="font-semibold text-blue-800 mb-2">Not yet in place</h4>
                         <ul className="text-sm space-y-1">
-                          <li>• Encryption in transit (HTTPS) and at rest</li>
+                          <li>• Encryption at rest</li>
                           <li>• Audit trails and monitoring</li>
                           <li>• Formal workforce training program</li>
                           <li>• Business associate agreements (none needed yet — no vendor handles PHI on our behalf today)</li>

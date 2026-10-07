@@ -95,7 +95,7 @@ running until someone noticed and started a container by hand. The image
 itself was fine; the failure was purely in the handoff between old and new.
 `swap.sh` starts the new image as a throwaway container on a side port
 first, waits for it to actually answer `/api/health`, and only *then* touches
-the live container on port 80 — so a bad image, a missing env file, or any
+the live container — so a bad image, a missing env file, or any
 other startup failure aborts with the old container still running,
 untouched, instead of taking the site down.
 
@@ -126,7 +126,7 @@ survivable) instead of triggering the kernel OOM killer and freezing the
 box. If this droplet is ever recreated from scratch, redo this step before
 running `swap.sh` for the first time.
 
-That's it — `http://<DROPLET_IP>` is then a working public link. Two things
+That's it — `https://starkwellhealth.com` is then the working public link (see "HTTPS" below; the bare IP now just redirects there). Two things
 worth knowing about what `swap.sh` is protecting against, both added
 2026-09-14 (the memory cap) and still true after the 2026-09-16 rewrite above:
 
@@ -174,7 +174,7 @@ an older tag instead of `starkwell:latest`:
 ```bash
 docker images | grep starkwell   # find the rollback tag to use
 docker rm -f starkwell
-docker run -d --name starkwell --restart unless-stopped -p 80:8080 --memory=1400m \
+docker run -d --name starkwell --restart unless-stopped -p 127.0.0.1:8080:8080 --memory=1400m \
   --env-file /root/starkwell.env \
   -v /root/starkwell-data:/app/data-writable starkwell:rollback-<timestamp>
 ```
@@ -239,32 +239,42 @@ corruption, a bad deploy or an accidental delete, but not against losing the
 droplet. For that, turn on DigitalOcean droplet backups (about 20% of the
 droplet price) or copy `/root/starkwell-backups` off the server.
 
+## HTTPS (domain `starkwellhealth.com`, set up 2026-10-07)
+
+Registered at Cloudflare Registrar (owner: Starkwell K.K.; account owned by
+the company, not an individual). DNS is at Cloudflare: an `A` record for `@`
+pointing at the droplet and a `CNAME` for `www`, both **DNS only** (grey
+cloud), not proxied.
+
+**Caddy** runs on the droplet (`systemctl status caddy`, config in
+`/etc/caddy/Caddyfile`) and owns ports 80 and 443. It gets and renews its
+Let's Encrypt certificate by itself (first one expires 2027-01-05 and renews
+well before that; nothing to do). It forwards to the app on `127.0.0.1:8080`,
+sends `www` and plain `http://` (including the bare IP) to
+`https://starkwellhealth.com`.
+
+- **The containers only publish to `127.0.0.1`.** `deploy/swap.sh` uses
+  `-p 127.0.0.1:8080:8080` (canary `8081`). Never publish them on a public
+  port: that would collide with Caddy and bypass HTTPS.
+- **`/root/starkwell.env` has `STARKWELL_TRUSTED_PROXIES=172.17.0.1`.** Requests
+  reach the container from Docker's bridge address (`172.17.0.1`), not from
+  `127.0.0.1`, so that is the proxy address the app has to trust. Caddy adds the
+  visitor's address in `X-Forwarded-For` and ignores a forged one from the
+  visitor. Checked live: after 8 bad logins from one visitor the 9th gets 429,
+  a forged header doesn't help, and a different visitor is unaffected.
+- **Changing the Caddy config:** edit `/etc/caddy/Caddyfile`, run
+  `caddy validate --config /etc/caddy/Caddyfile`, then `systemctl reload caddy`.
+- **If HTTPS ever breaks and the site must come back fast:** put a one-line
+  plain-HTTP config in place so visitors get the site while you investigate:
+  `printf ':80 {\n\treverse_proxy 127.0.0.1:8080\n}\n' > /etc/caddy/Caddyfile.fallback && caddy reload --config /etc/caddy/Caddyfile.fallback --adapter caddyfile`
+- **Known limit:** `swap.sh` still stops the live container and starts the new
+  one, which takes about 3.5 minutes to load its data. During that time Caddy
+  answers 502. A blue/green swap (start the new container on the other port,
+  switch Caddy over, then retire the old one) would remove that gap.
+- **Not yet done:** an HSTS header (tells browsers to always use HTTPS). Add it
+  once HTTPS has run cleanly for a while.
+
 ## 6. Optional, later, still cheap
 
-- **A real domain + HTTPS**: a domain costs ~$10-15/year, and
-  [Caddy](https://caddyserver.com/) in front of the container gets free
-  auto-renewing HTTPS with about 5 lines of config. Not needed for an IP link
-  sent to a handful of people — worth doing once this is more than a demo.
-  **When you add a proxy, two more things are needed**, or the per-visitor
-  limits (5 reviews/hour, 5 appointment requests/hour, 8 provider logins per
-  5 minutes) quietly turn into one shared bucket for the whole site, so a
-  single person can lock every provider out of logging in:
-  1. Tell the API which address the proxy connects from: add
-     `STARKWELL_TRUSTED_PROXIES=<proxy address>` (an IP or CIDR, comma
-     separated) to `/root/starkwell.env`. The API only believes
-     `X-Forwarded-For` from those addresses and uses its **last** entry (the
-     one the proxy appended). A malformed value makes the container fail at
-     startup, which the canary check catches. Find the address with
-     `docker logs starkwell` after a request through the proxy: it is the
-     client address shown for every request.
-  2. Stop publishing the container port to the world. `swap.sh` currently
-     runs `-p 80:8080` (and the canary on 8081), so the API stays reachable
-     without the proxy; use `-p 127.0.0.1:8080:8080` once the proxy exists.
-     This is what makes the header trustworthy, and the API ignores the
-     header from any other caller regardless.
-  The proxy itself must send `X-Forwarded-For`. Caddy's `reverse_proxy` does by
-  default; **nginx does not** — it needs
-  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` in the
-  location block. Without the header the API falls back to the proxy's
-  address and everyone shares one limit, with no error to tell you.
+- **Domain + HTTPS**: done 2026-10-07, see the "HTTPS" section above.
 - Everything above stays at **$6/month total** with no domain.
