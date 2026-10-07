@@ -173,11 +173,9 @@ before swapping (see step 3), so recovering from a bad deploy is just running
 an older tag instead of `starkwell:latest`:
 ```bash
 docker images | grep starkwell   # find the rollback tag to use
-docker rm -f starkwell
-docker run -d --name starkwell --restart unless-stopped -p 127.0.0.1:8080:8080 --memory=1400m \
-  --env-file /root/starkwell.env \
-  -v /root/starkwell-data:/app/data-writable starkwell:rollback-<timestamp>
+IMAGE=starkwell:rollback-<timestamp> bash /root/starkwell/deploy/swap.sh
 ```
+That is the same zero-downtime swap, onto the older image.
 This is also the fix for the 2026-09-14 outage described above: the bad
 image was never re-tagged as `:latest`, so `starkwell:latest` still pointed
 at the last known-good build and rolling back was exactly this.
@@ -220,6 +218,20 @@ rather than falling back to a slow scan of the full table.
 the site shows "not live yet" until `STARKWELL_APPOINTMENT_REQUESTS=1` is added
 to `/root/starkwell.env`. Don't turn it on until provider claims are verified
 and the site is on https (requests carry a patient's name and phone number).
+
+## Practice accounts: forgotten passwords
+
+Practices log in at `/provider-login` (passwords are stored only as salted
+hashes). There is no automatic reset email yet, so when a practice writes in,
+reset it by hand on the droplet:
+
+```bash
+python3 /root/starkwell/api/reset_provider_password.py their-email@practice.com
+```
+
+It asks for a new password twice, stores a fresh hash, and signs that account
+out everywhere. Send the practice the new password through a channel you trust
+and ask them to change it.
 
 ## Backups of the data that exists nowhere else
 
@@ -267,10 +279,16 @@ sends `www` and plain `http://` (including the bare IP) to
 - **If HTTPS ever breaks and the site must come back fast:** put a one-line
   plain-HTTP config in place so visitors get the site while you investigate:
   `printf ':80 {\n\treverse_proxy 127.0.0.1:8080\n}\n' > /etc/caddy/Caddyfile.fallback && caddy reload --config /etc/caddy/Caddyfile.fallback --adapter caddyfile`
-- **Known limit:** `swap.sh` still stops the live container and starts the new
-  one, which takes about 3.5 minutes to load its data. During that time Caddy
-  answers 502. A blue/green swap (start the new container on the other port,
-  switch Caddy over, then retire the old one) would remove that gap.
+- **Deploys have no downtime** (since 2026-10-07). `swap.sh` starts the new
+  image on the spare port (8080 or 8081, whichever is not live), waits for it
+  to answer `/api/health` (about 4 minutes), points Caddy at it with a graceful
+  reload, checks the site through Caddy over HTTPS, then retires the old
+  container. Anything that fails before the switch leaves the live site
+  untouched; a failed check after it puts Caddy back on the old container.
+  Verified with a probe: 169 of 169 requests succeeded across a swap. To see
+  which port is live: `grep reverse_proxy /etc/caddy/Caddyfile`. Container
+  names are `starkwell-8080` / `starkwell-8081` (the one named plain
+  `starkwell` was the pre-swap original).
 - **Not yet done:** an HSTS header (tells browsers to always use HTTPS). Add it
   once HTTPS has run cleanly for a while.
 

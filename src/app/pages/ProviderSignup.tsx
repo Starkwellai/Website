@@ -57,6 +57,8 @@ export function ProviderSignup() {
     city: "",
     state: "",
     message: "",
+    password: "",
+    confirmPassword: "",
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
@@ -91,6 +93,14 @@ export function ProviderSignup() {
     e.preventDefault();
     setError(null);
 
+    if (formData.password.length < 8) {
+      setError("Choose a password with at least 8 characters.");
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("The two passwords don't match.");
+      return;
+    }
     if (!acceptedTerms || !acceptedPrivacy) {
       setError("Please accept the Terms and Privacy Policy to continue.");
       return;
@@ -102,6 +112,7 @@ export function ProviderSignup() {
         practice_name: formData.practiceName,
         contact_name: formData.contactName,
         email: formData.email,
+        password: formData.password,
         phone: formData.phone || undefined,
         npi: formData.npi || undefined,
         specialty: formData.specialty || undefined,
@@ -206,6 +217,27 @@ export function ProviderSignup() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
+                        <Label htmlFor="password" className="text-blue-900">Password</Label>
+                        <Input
+                          id="password" name="password" type="password" autoComplete="new-password"
+                          minLength={8} placeholder="At least 8 characters"
+                          value={formData.password} onChange={handleChange} required
+                          className="border-blue-200 focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword" className="text-blue-900">Confirm password</Label>
+                        <Input
+                          id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password"
+                          minLength={8}
+                          value={formData.confirmPassword} onChange={handleChange} required
+                          className="border-blue-200 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
                         <Label htmlFor="city" className="text-blue-900">City</Label>
                         <Input
                           id="city" name="city" placeholder="Salt Lake City"
@@ -296,9 +328,10 @@ export function ProviderSignup() {
                     </Button>
 
                     <p className="text-xs text-center text-gray-500">
-                      Already signed up? Come back to this page on the same device and browser
-                      you used originally — your dashboard will open automatically. Signing in
-                      from a different device isn't available yet.
+                      Already have an account?{" "}
+                      <button type="button" onClick={() => navigate("/provider-login")} className="text-blue-600 hover:underline font-medium">
+                        Log in
+                      </button>
                     </p>
                   </form>
                 </CardContent>

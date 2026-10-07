@@ -9,13 +9,13 @@ import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { loginProviderAccount } from "../../lib/starkwell";
 
 /**
- * Intentionally unrouted for now (see routes.tsx) — this page collects a
- * password, and the site has no HTTPS yet, so a real password would travel
- * in plaintext. The backend endpoint it calls (api/serving_api.py's
- * provider_login) still exists and works; ProviderSignup.tsx no longer
- * collects a password at all, so nothing on this page's account exists to
- * log into currently. Re-wire the route back in once HTTPS is live and
- * ProviderSignup collects a password again.
+ * Practice log-in at /provider-login. Switched back on 2026-10-07, once the site
+ * moved to HTTPS (it had been unrouted because a password would have crossed the
+ * internet in plain text). ProviderSignup collects a password again, so every new
+ * account can log in from any device. Passwords are stored as salted PBKDF2
+ * hashes, never in plain text. There is no automatic password reset yet (no
+ * outbound email); a forgotten password is reset by hand with
+ * api/reset_provider_password.py.
  */
 export function ProviderLogin() {
   const navigate = useNavigate();

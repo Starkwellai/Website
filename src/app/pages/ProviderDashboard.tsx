@@ -44,7 +44,7 @@ import { getCurrentProviderAccount, logoutProviderAccount, type ProviderAccount 
  * UserContext the rest of the role-gated dashboards still use. No password
  * yet, by design — see the note above provider_accounts in
  * api/serving_api.py — so "signed in" currently just means this browser
- * holds a valid session token from signup; redirects to /provider-signup,
+ * holds a valid session token from signup; redirects to /provider-login,
  * not a login page, when there isn't one.
  */
 export function ProviderDashboard() {
@@ -59,14 +59,14 @@ export function ProviderDashboard() {
       .then((acct) => {
         if (cancelled) return;
         if (!acct) {
-          navigate("/provider-signup");
+          navigate("/provider-login");
           return;
         }
         setAccount(acct);
         setCheckingAuth(false);
       })
       .catch(() => {
-        if (!cancelled) navigate("/provider-signup");
+        if (!cancelled) navigate("/provider-login");
       });
     return () => {
       cancelled = true;

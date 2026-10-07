@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+# Account and internal pages: nothing for a search engine to index.
+Disallow: /provider-dashboard
+Disallow: /provider-login
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /profile
+Disallow: /notifications
+Disallow: /audit-log
+Disallow: /admin
+Disallow: /support-dashboard
+Disallow: /database-scan
+Disallow: /api/
+
+Sitemap: https://starkwellhealth.com/sitemap.xml

@@ -209,7 +209,7 @@ export function HipaaPrivacy() {
                         <ul className="text-sm space-y-1">
                           <li>• Providers only see their own claimed listings and requests</li>
                           <li>• We never sell your data, and never share it without consent</li>
-                          <li>• Passwordless accounts — no password to leak, by design</li>
+                          <li>• Practice passwords are stored only as salted hashes, never in plain text</li>
                           <li>• HTTPS (encryption in transit between your browser and this site)</li>
                         </ul>
                       </div>

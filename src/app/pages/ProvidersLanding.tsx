@@ -152,6 +152,13 @@ export function ProvidersLanding() {
                 For Patients
               </Button>
               <Button
+                variant="ghost"
+                onClick={() => navigate("/provider-login")}
+                className="text-gray-700 hover:text-blue-600"
+              >
+                Practice log in
+              </Button>
+              <Button
                 onClick={() => navigate("/provider-signup")}
                 className="bg-blue-600 hover:bg-blue-700"
               >
