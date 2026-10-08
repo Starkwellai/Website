@@ -2635,6 +2635,17 @@ def _provider_db() -> sqlite3.Connection:
             claimed_at TEXT NOT NULL
         )
     """)
+    # Claims are private until a person at Starkwell approves them (added 2026-10-08).
+    # 'pending' is the default so a claim made before this existed is NOT treated as
+    # approved: none of them were ever checked.
+    have = {r[1] for r in con.execute("PRAGMA table_info(claimed_listings)")}
+    for col, ddl in (("status", "TEXT NOT NULL DEFAULT 'pending'"), ("reviewed_at", "TEXT"), ("review_note", "TEXT")):
+        if col not in have:
+            try:
+                con.execute(f"ALTER TABLE claimed_listings ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError:
+                pass  # another request added it first
+    con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_status ON claimed_listings(status)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_facility ON claimed_listings(facility_key)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_claimed_provider ON claimed_listings(provider_id)")
     con.execute("""
@@ -2904,7 +2915,7 @@ def my_listings(request: Request):
     con = _provider_db()
     try:
         rows = con.execute(
-            "SELECT facility_key, facility_label, address, city, description, claimed_at "
+            "SELECT facility_key, facility_label, address, city, description, claimed_at, status, review_note "
             "FROM claimed_listings WHERE provider_id = ? ORDER BY claimed_at DESC",
             (provider["id"],),
         ).fetchall()
@@ -2956,7 +2967,9 @@ def unclaim_listing(facility_key: str, request: Request):
 @app.get("/api/facilities/{facility_key}/listing")
 def public_listing(facility_key: str):
     """Public, no auth -- this is what a patient's facility page reads to
-    show a claimed description, same pattern as get_reviews() below: a
+    show a claimed description. ONLY approved claims are returned: a claim is
+    private until a person at Starkwell has reviewed it (see admin_claims).
+    Same pattern as get_reviews() below: a
     separate call the frontend merges with the pricing data, not a SQL join,
     because this lives in the provider-accounts SQLite file and the pricing
     data lives in a completely separate DuckDB connection."""
@@ -2965,13 +2978,114 @@ def public_listing(facility_key: str):
         rows = con.execute(
             "SELECT cl.facility_label, cl.description, cl.claimed_at, pa.practice_name, pa.phone "
             "FROM claimed_listings cl JOIN provider_accounts pa ON pa.id = cl.provider_id "
-            "WHERE cl.facility_key = ? ORDER BY cl.claimed_at ASC",
+            "WHERE cl.facility_key = ? AND cl.status = 'approved' ORDER BY cl.claimed_at ASC",
             (facility_key,),
         ).fetchall()
     finally:
         con.close()
     return {"facility_key": facility_key, "claims": [dict(r) for r in rows],
             "appointment_requests_enabled": APPOINTMENT_REQUESTS_ENABLED}
+
+
+# ---- claim review (owner only) ------------------------------------------------
+# Anyone can sign up and claim any location, so a claim shows nothing publicly
+# until a person approves it. The owner reviews them on /admin/claims, which
+# calls the endpoints below with a secret code (STARKWELL_ADMIN_TOKEN). If that
+# variable is not set the endpoints answer 404 as if they did not exist, so
+# there is nothing to attack on a deployment that has not opted in. The code is
+# compared in constant time, and wrong guesses are rate limited per visitor.
+ADMIN_TOKEN = os.environ.get("STARKWELL_ADMIN_TOKEN", "")
+_admin_fail_limiter = RateLimiter(limit=10, window=300.0)
+
+
+def _require_admin(request: Request) -> None:
+    if not ADMIN_TOKEN:
+        raise HTTPException(404, "Not found.")
+    auth = request.headers.get("authorization", "")
+    supplied = auth[len("Bearer "):].strip() if auth.startswith("Bearer ") else ""
+    if not supplied or not secrets.compare_digest(supplied.encode(), ADMIN_TOKEN.encode()):
+        _enforce(_admin_fail_limiter, _client_ip(request), "Too many attempts — try again in a few minutes.")
+        raise HTTPException(401, "Incorrect admin code.")
+
+
+def _street(address: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", (address or "").upper().split("#")[0]).strip()
+
+
+def _npi_record(npi: Optional[str]) -> Optional[dict]:
+    """What the federal registry (via our providers table) says about the NPI the
+    claimant typed at signup -- the quickest sanity check on a claim."""
+    if not npi or not re.fullmatch(r"\d{10}", npi.strip()):
+        return None
+    try:
+        rows = q(f"SELECT name, address, city, state, phone, taxonomy_code "
+                 f"FROM read_parquet('{PROVIDERS.as_posix()}') WHERE CAST(npi AS VARCHAR) = ? LIMIT 1", [npi.strip()])
+    except Exception:
+        return None
+    return rows[0] if rows else None
+
+
+def _published_phones(address: str, city: str) -> list[str]:
+    """Phone numbers on file for the claimed address: call one to confirm the
+    claim is real."""
+    try:
+        rows = q(f"SELECT DISTINCT phone FROM read_parquet('{PROVIDERS.as_posix()}') "
+                 f"WHERE upper(trim(address)) = ? AND upper(trim(city)) = ? "
+                 f"AND phone IS NOT NULL AND trim(phone) <> '' LIMIT 4",
+                 [address.upper().strip(), city.upper().strip()])
+    except Exception:
+        return []
+    return [r["phone"] for r in rows]
+
+
+@app.get("/api/admin/claims")
+def admin_claims(request: Request, status: str = Query("pending", pattern="^(pending|approved|rejected|all)$")):
+    _require_admin(request)
+    con = _provider_db()
+    try:
+        counts = {r["status"]: r["n"] for r in con.execute(
+            "SELECT status, count(*) AS n FROM claimed_listings GROUP BY status").fetchall()}
+        where, params = ("", []) if status == "all" else ("WHERE cl.status = ?", [status])
+        rows = con.execute(
+            "SELECT cl.id, cl.status, cl.facility_key, cl.facility_label, cl.address, cl.city, cl.description, "
+            "cl.claimed_at, cl.reviewed_at, cl.review_note, pa.practice_name, pa.contact_name, pa.email, "
+            "pa.phone, pa.npi, pa.specialty, pa.city AS provider_city, pa.state AS provider_state, pa.message "
+            f"FROM claimed_listings cl JOIN provider_accounts pa ON pa.id = cl.provider_id {where} "
+            "ORDER BY cl.claimed_at DESC LIMIT 200", params).fetchall()
+    finally:
+        con.close()
+    claims = []
+    for r in rows:
+        c = dict(r)
+        c["published_phones"] = _published_phones(c["address"], c["city"])
+        rec = _npi_record(c["npi"])
+        c["npi_record"] = rec
+        # Compare the street only: suite numbers differ between records ("# 4"), and the
+        # same building appears under "SLC" and "SALT LAKE CITY".
+        c["npi_at_claimed_address"] = bool(rec and _street(rec["address"]) == _street(c["address"]))
+        claims.append(c)
+    return {"counts": {k: counts.get(k, 0) for k in ("pending", "approved", "rejected")}, "claims": claims}
+
+
+class ClaimDecisionBody(BaseModel):
+    decision: str = Field(..., pattern="^(approved|rejected|pending)$")
+    note: Optional[str] = Field(None, max_length=500)
+
+
+@app.post("/api/admin/claims/{claim_id}/decision")
+def admin_decide_claim(claim_id: int, body: ClaimDecisionBody, request: Request):
+    _require_admin(request)
+    con = _provider_db()
+    try:
+        if con.execute("SELECT id FROM claimed_listings WHERE id = ?", (claim_id,)).fetchone() is None:
+            raise HTTPException(404, "Claim not found.")
+        reviewed_at = None if body.decision == "pending" else datetime.now(timezone.utc).isoformat()
+        con.execute("UPDATE claimed_listings SET status = ?, reviewed_at = ?, review_note = ? WHERE id = ?",
+                    (body.decision, reviewed_at, (body.note or "").strip() or None, claim_id))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True, "id": claim_id, "status": body.decision}
 
 
 # ---- appointment requests ---------------------------------------------------
@@ -3020,7 +3134,8 @@ def request_appointment(facility_key: str, body: AppointmentRequestBody, request
     con = _provider_db()
     try:
         claims = con.execute(
-            "SELECT provider_id, facility_label, address, city FROM claimed_listings WHERE facility_key = ?",
+            "SELECT provider_id, facility_label, address, city FROM claimed_listings "
+            "WHERE facility_key = ? AND status = 'approved'",
             (facility_key,),
         ).fetchall()
         if not claims:

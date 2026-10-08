@@ -47,7 +47,7 @@ export function ProviderVerificationPending() {
               <div className="bg-blue-50 p-6 rounded-lg border border-blue-100">
                 <h3 className="font-semibold text-blue-900 text-lg mb-2">What happens next</h3>
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  You can claim your practice's location from your dashboard now. A claimed listing appears on the public page right away. We don't independently verify practices, credentials or NPI numbers yet; that's coming soon, and we'll update this page when it is.
+                  You can claim your practice's location from your dashboard now. A claim stays private until we have reviewed it, and we may contact you to confirm it is really your practice. Your dashboard shows each claim's status.
                 </p>
               </div>
 

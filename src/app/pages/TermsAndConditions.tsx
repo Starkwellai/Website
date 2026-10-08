@@ -82,7 +82,7 @@ export function TermsAndConditions() {
                   <section>
                     <h2 className="text-xl font-semibold text-blue-900 mb-3">4. Healthcare Information Disclaimer</h2>
                     <p className="mb-3">
-                      Starkwell is a price-comparison tool. The prices it shows come from rate files that insurers and hospitals publish; they are not quotes, and your actual cost depends on your plan and the care you receive. Practice details on a claimed listing are provided by whoever claimed it and are not independently verified by Starkwell. Starkwell is not a substitute for professional medical advice, diagnosis, or treatment, and it does not book appointments, sell insurance, or process payments.
+                      Starkwell is a price-comparison tool. The prices it shows come from rate files that insurers and hospitals publish; they are not quotes, and your actual cost depends on your plan and the care you receive. Starkwell reviews a practice's claim before its listing appears, but the details on a claimed listing are written by the practice and are not checked or endorsed by Starkwell. Starkwell is not a substitute for professional medical advice, diagnosis, or treatment, and it does not book appointments, sell insurance, or process payments.
                     </p>
                     <p className="mb-3 font-medium text-blue-900">
                       Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of something you have read on this Service.

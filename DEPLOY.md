@@ -219,6 +219,26 @@ the site shows "not live yet" until `STARKWELL_APPOINTMENT_REQUESTS=1` is added
 to `/root/starkwell.env`. Don't turn it on until provider claims are verified
 and the site is on https (requests carry a patient's name and phone number).
 
+## Reviewing practice claims
+
+Anyone can sign up and claim any location, so a claim is **private until you approve it**
+(only approved claims appear on a facility page, and only approved claims can receive
+appointment requests). You review them at **https://starkwellhealth.com/admin/claims**:
+
+- Sign in with the admin code. It is `STARKWELL_ADMIN_TOKEN` in `/root/starkwell.env` on the
+  droplet; a copy is in `D:\Starkwell\private\admin_code.txt` on your PC (that folder is
+  git-ignored and is not part of the OneDrive backup). If the variable is not set, the review
+  endpoints answer 404 as if they did not exist. The page keeps the code in the browser tab
+  only, so closing the tab signs you out.
+- Each claim shows who claimed it, the phone numbers on file for that address (call one and
+  confirm), and what the NPI they typed belongs to in the federal registry data (and whether it
+  is at the same street address). Approve, "Don't approve" (with an optional note the practice
+  can see), or move it back to waiting.
+- There is no email alert yet when a claim arrives, so check the page now and then; the count
+  on the "Waiting for review" tab is the number to watch.
+- To change the admin code: edit `STARKWELL_ADMIN_TOKEN` in `/root/starkwell.env`, then run a
+  deploy (the containers read the env file when they start).
+
 ## Practice accounts: forgotten passwords
 
 Practices log in at `/provider-login` (passwords are stored only as salted

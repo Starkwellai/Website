@@ -60,7 +60,7 @@ export function TermsContent() {
           Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition. Never disregard professional medical advice or delay in seeking it because of information you have read on the Service.
         </p>
         <p>
-          Prices shown on the Service come from the machine-readable rate files that insurers and hospitals publish, and they are not quotes. Your actual cost depends on your plan, your deductible, and the services you receive, and the rates change. We try to be accurate but cannot guarantee that any price is current or complete. Practice details on a claimed listing are provided by whoever claimed it and are not independently verified by Starkwell.
+          Prices shown on the Service come from the machine-readable rate files that insurers and hospitals publish, and they are not quotes. Your actual cost depends on your plan, your deductible, and the services you receive, and the rates change. We try to be accurate but cannot guarantee that any price is current or complete. Starkwell reviews a practice's claim before its listing appears, but the details on a claimed listing are written by the practice and are not checked or endorsed by Starkwell.
         </p>
       </section>
 

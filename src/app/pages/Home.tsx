@@ -727,7 +727,7 @@ export function Home() {
                   <ArrowRight className="ml-2 size-5" />
                 </Button>
                 <p className="text-sm text-gray-500 text-center mt-4">
-                  Claims aren&rsquo;t independently verified yet &mdash; verification is coming soon. Setting your own prices and online
+                  Each claim is reviewed before it appears publicly. Setting your own prices and online
                   scheduling are coming soon.
                 </p>
               </div>

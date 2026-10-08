@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Badge } from "./ui/badge";
 import { MapPin, Plus, X } from "lucide-react";
 import {
   searchMyFacility, claimListing, getMyListings, updateListingDescription, unclaimListing,
@@ -129,6 +130,7 @@ export function ProviderListingsCard() {
             </CardTitle>
             <CardDescription>
               Claim your real location so patients who find you on price can see who you are.
+              We review each claim before it appears publicly.
             </CardDescription>
           </div>
           {!showSearch && (
@@ -226,6 +228,20 @@ export function ProviderListingsCard() {
                   <div>
                     <p className="font-semibold text-gray-900">{l.facility_label}</p>
                     <p className="text-xs text-gray-500">{l.address}, {l.city}</p>
+                    <div className="mt-1.5">
+                      {l.status === "approved" ? (
+                        <Badge variant="outline" className="border-green-600 text-green-700 bg-green-50">Approved — shown publicly</Badge>
+                      ) : l.status === "rejected" ? (
+                        <Badge variant="outline" className="border-red-300 text-red-700 bg-red-50">Not approved</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50">Waiting for review — not public yet</Badge>
+                      )}
+                    </div>
+                    {l.status === "rejected" && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        {l.review_note ? `Note from Starkwell: ${l.review_note}` : "We couldn't confirm this claim."}
+                      </p>
+                    )}
                   </div>
                   <Button
                     variant="ghost"

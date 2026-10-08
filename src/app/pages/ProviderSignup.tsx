@@ -153,7 +153,7 @@ export function ProviderSignup() {
                   <h3 className="text-2xl font-bold text-blue-900">Create your account</h3>
                 </div>
                 <p className="text-gray-700 mb-6">
-                  Tell us about your practice. Your account works right away, but we don't independently verify practices or credentials yet. That's coming soon.
+                  Tell us about your practice. Your account works right away. Anything you claim stays private until we have reviewed it.
                 </p>
               </div>
             </div>

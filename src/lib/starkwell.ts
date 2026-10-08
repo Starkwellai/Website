@@ -796,7 +796,13 @@ export interface ClaimedListing {
   city: string;
   description: string | null;
   claimed_at: string;
+  /** A claim is private until it is approved (see claim review in api/serving_api.py). */
+  status: ClaimStatus;
+  /** The reviewer's note, shown when a claim was not approved. */
+  review_note: string | null;
 }
+
+export type ClaimStatus = "pending" | "approved" | "rejected";
 
 export async function getMyListings(): Promise<ClaimedListing[]> {
   const res = await fetch(`${BASE}/provider/listings`, { headers: _authHeaders() });
@@ -1028,4 +1034,50 @@ export interface DrugDetail {
 
 export async function getDrug(drugName: string): Promise<DrugDetail> {
   return get<DrugDetail>("/drugs/detail", { name: drugName });
+}
+
+// ---- owner-only claim review (see api/serving_api.py, "claim review") ----
+
+export interface AdminClaim {
+  id: number;
+  status: ClaimStatus;
+  facility_key: string;
+  facility_label: string;
+  address: string;
+  city: string;
+  description: string | null;
+  claimed_at: string;
+  reviewed_at: string | null;
+  review_note: string | null;
+  practice_name: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  npi: string | null;
+  specialty: string | null;
+  provider_city: string | null;
+  provider_state: string | null;
+  message: string | null;
+  /** Phone numbers on file for the claimed address, to call and confirm. */
+  published_phones: string[];
+  /** What the NPI the claimant typed belongs to in the federal registry data. */
+  npi_record: { name: string; address: string; city: string; state: string; phone: string | null; taxonomy_code: string | null } | null;
+  npi_at_claimed_address: boolean;
+}
+
+export type AdminClaimCounts = Record<ClaimStatus, number>;
+
+export async function adminListClaims(token: string, status: ClaimStatus | "all"): Promise<{ claims: AdminClaim[]; counts: AdminClaimCounts }> {
+  const res = await fetch(`${BASE}/admin/claims?status=${status}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`${res.status} ${await readErrorDetail(res)}`);
+  return res.json();
+}
+
+export async function adminDecideClaim(token: string, id: number, decision: ClaimStatus, note?: string): Promise<void> {
+  const res = await fetch(`${BASE}/admin/claims/${id}/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ decision, note: note?.trim() || undefined }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await readErrorDetail(res)}`);
 }

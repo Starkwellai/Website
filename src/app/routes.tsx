@@ -29,6 +29,7 @@ import { Settings } from "./pages/Settings";
 import { ProviderSignup } from "./pages/ProviderSignup";
 import { ProvidersLanding } from "./pages/ProvidersLanding";
 import { ProviderLogin } from "./pages/ProviderLogin";
+import { AdminClaims } from "./pages/AdminClaims";
 import { ProviderVerificationPending } from "./pages/ProviderVerificationPending";
 import { DatabaseScan } from "./pages/DatabaseScan";
 
@@ -167,6 +168,10 @@ export const router = createBrowserRouter([
   {
     path: "/admin",
     element: <AdminDashboard />,
+  },
+  {
+    path: "/admin/claims",
+    element: <AdminClaims />,
   },
   {
     path: "/provider-dashboard",
