@@ -6,7 +6,7 @@ import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
 import { MapPin, Plus, X } from "lucide-react";
 import {
-  searchMyFacility, claimListing, getMyListings, updateListingDescription, unclaimListing,
+  searchMyFacility, claimListing, getMyListings, updateListing, unclaimListing,
   type FacilityMatch, type ClaimedListing,
 } from "../../lib/starkwell";
 
@@ -38,8 +38,9 @@ export function ProviderListingsCard() {
   const [claimError, setClaimError] = useState<string | null>(null);
 
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState("");
+  const [form, setForm] = useState({ description: "", phone: "", website: "", hours: "", insurance_note: "" });
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const loadListings = async () => {
     setLoadingListings(true);
@@ -98,17 +99,32 @@ export function ProviderListingsCard() {
 
   function startEdit(listing: ClaimedListing) {
     setEditingKey(listing.facility_key);
-    setEditDraft(listing.description ?? "");
+    setEditError(null);
+    setForm({
+      description: listing.description ?? "",
+      phone: listing.phone ?? "",
+      website: listing.website ?? "",
+      hours: listing.hours ?? "",
+      insurance_note: listing.insurance_note ?? "",
+    });
   }
 
   async function saveEdit(facilityKey: string) {
     setSaving(true);
+    setEditError(null);
     try {
-      await updateListingDescription(facilityKey, editDraft.trim());
+      await updateListing(facilityKey, {
+        description: form.description.trim(),
+        phone: form.phone.trim(),
+        website: form.website.trim(),
+        hours: form.hours.trim(),
+        insurance_note: form.insurance_note.trim(),
+      });
       setEditingKey(null);
       await loadListings();
-    } catch {
+    } catch (err) {
       // leave the editor open on failure so nothing typed is lost
+      setEditError(err instanceof Error ? err.message : "Couldn't save — try again.");
     } finally {
       setSaving(false);
     }
@@ -254,14 +270,43 @@ export function ProviderListingsCard() {
                 </div>
 
                 {editingKey === l.facility_key ? (
-                  <div className="space-y-2">
-                    <Textarea
-                      value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
-                      maxLength={1000}
-                      rows={3}
-                      placeholder="Tell patients who you are — what you treat, what makes your clinic worth choosing."
-                    />
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-700">About your practice</label>
+                      <Textarea
+                        value={form.description}
+                        onChange={(e) => setForm({ ...form, description: e.target.value })}
+                        maxLength={1000}
+                        rows={3}
+                        placeholder="Tell patients who you are — what you treat, what makes your clinic worth choosing."
+                      />
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-700">Phone for this location</label>
+                        <Input value={form.phone} maxLength={40} placeholder="(801) 555-0100"
+                               onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-700">Website</label>
+                        <Input value={form.website} maxLength={200} placeholder="https://www.yourclinic.com"
+                               onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-700">Hours</label>
+                      <Textarea value={form.hours} maxLength={300} rows={2} placeholder="Mon–Fri 8am–5pm, Sat 9am–12pm"
+                                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-700">Insurance and payment</label>
+                      <Input value={form.insurance_note} maxLength={300} placeholder="Most major plans accepted; self-pay discounts available"
+                             onChange={(e) => setForm({ ...form, insurance_note: e.target.value })} />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Patients see this once your claim is approved, labeled as written by the practice. Leave a field empty to remove it.
+                    </p>
+                    {editError && <p className="text-sm text-red-700" role="alert">{editError}</p>}
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -279,14 +324,22 @@ export function ProviderListingsCard() {
                 ) : (
                   <div>
                     {l.description ? (
-                      <p className="text-sm text-gray-700 mb-2">{l.description}</p>
+                      <p className="text-sm text-gray-700 mb-2 whitespace-pre-wrap">{l.description}</p>
                     ) : (
                       <p className="text-sm text-gray-400 italic mb-2">
                         No description yet — patients only see your address until you add one.
                       </p>
                     )}
+                    {(l.phone || l.website || l.hours || l.insurance_note) && (
+                      <ul className="text-sm text-gray-600 mb-2 space-y-0.5">
+                        {l.phone && <li>Phone: {l.phone}</li>}
+                        {l.website && <li>Website: {l.website}</li>}
+                        {l.hours && <li>Hours: {l.hours}</li>}
+                        {l.insurance_note && <li>Insurance: {l.insurance_note}</li>}
+                      </ul>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => startEdit(l)}>
-                      {l.description ? "Edit description" : "Add a description"}
+                      Edit details
                     </Button>
                   </div>
                 )}

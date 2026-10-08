@@ -9,6 +9,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { MapPin, Star, ShieldCheck, ArrowLeft, Building2 } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
 import { AppointmentRequestsNotLive } from "../components/AppointmentRequestsNotLive";
+import { PracticeDetails } from "../components/PracticeDetails";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   getFacilityProfile, getFacilityReviews, getPublicListing, requestAppointment,
@@ -177,7 +178,7 @@ export function FacilityProfile() {
                         </Badge>
                       </div>
                       {c.description && <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.description}</p>}
-                      {c.phone && <p className="text-sm text-gray-600 mt-1">{c.phone}</p>}
+                      <PracticeDetails claim={c} />
                     </div>
                   ))}
                   <div className="pt-3 border-t border-teal-200">

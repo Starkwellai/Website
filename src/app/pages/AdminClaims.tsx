@@ -4,9 +4,10 @@ import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
+import { AdminReviewsPanel } from "../components/AdminReviewsPanel";
 import { AlertCircle, CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
 import {
-  adminListClaims, adminDecideClaim,
+  adminListClaims, adminDecideClaim, adminListReviews,
   type AdminClaim, type AdminClaimCounts, type ClaimStatus,
 } from "../../lib/starkwell";
 
@@ -30,6 +31,8 @@ function readToken(): string {
 export function AdminClaims() {
   const [token, setToken] = useState(readToken());
   const [draftToken, setDraftToken] = useState("");
+  const [mode, setMode] = useState<"claims" | "reviews">("claims");
+  const [flaggedCount, setFlaggedCount] = useState<number | null>(null);
   const [tab, setTab] = useState<ClaimStatus>("pending");
   const [claims, setClaims] = useState<AdminClaim[]>([]);
   const [counts, setCounts] = useState<AdminClaimCounts | null>(null);
@@ -61,6 +64,12 @@ export function AdminClaims() {
   }, [token, tab, signOut]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // so the "reported" count on the Reviews button is right as soon as the page opens
+  useEffect(() => {
+    if (!token) return;
+    adminListReviews(token, "flagged").then(r => setFlaggedCount(r.counts.flagged)).catch(() => undefined);
+  }, [token]);
 
   async function decide(c: AdminClaim, decision: ClaimStatus) {
     setBusyId(c.id); setError(null);
@@ -113,13 +122,27 @@ export function AdminClaims() {
         <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-6 text-blue-600" />
-            <h1 className="text-xl font-bold text-gray-900">Practice claims</h1>
+            <h1 className="text-xl font-bold text-gray-900">Review claims and reviews</h1>
           </div>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>Sign out</Button>
         </div>
       </header>
 
       <main className="container mx-auto px-6 py-6 max-w-4xl">
+        <div className="flex gap-2 mb-6 border-b border-gray-200 pb-4">
+          <Button size="sm" variant={mode === "claims" ? "default" : "outline"} onClick={() => setMode("claims")}>
+            Practice claims{counts ? ` (${counts.pending} waiting)` : ""}
+          </Button>
+          <Button size="sm" variant={mode === "reviews" ? "default" : "outline"} onClick={() => setMode("reviews")}>
+            Patient reviews{flaggedCount ? ` (${flaggedCount} reported)` : ""}
+          </Button>
+        </div>
+
+        {mode === "reviews" && (
+          <AdminReviewsPanel token={token} onAuthError={(m) => signOut(m)} onCounts={(c) => setFlaggedCount(c.flagged)} />
+        )}
+
+        {mode === "claims" && (<>
         <p className="text-sm text-gray-600 mb-4">
           A claim stays private until you approve it. To check one: call a published phone number for the
           location, and compare the NPI record with the claim. Approve only when you are satisfied it is
@@ -195,10 +218,17 @@ export function AdminClaims() {
                   </div>
                 </div>
 
-                {c.description && (
-                  <div className="text-sm bg-gray-50 border border-gray-200 rounded p-3">
-                    <p className="text-xs font-medium text-gray-500 mb-1">Description they wrote</p>
-                    <p className="whitespace-pre-wrap">{c.description}</p>
+                {(c.description || c.listing_phone || c.website || c.hours || c.insurance_note) && (
+                  <div className="text-sm bg-gray-50 border border-gray-200 rounded p-3 space-y-1">
+                    <p className="text-xs font-medium text-gray-500">What will be public if you approve</p>
+                    {c.description && <p className="whitespace-pre-wrap">{c.description}</p>}
+                    {c.listing_phone && <p>Phone: {c.listing_phone}</p>}
+                    {c.website && <p>Website: <a className="text-blue-600 hover:underline" href={c.website} target="_blank" rel="noopener noreferrer nofollow">{c.website}</a></p>}
+                    {c.hours && <p className="whitespace-pre-wrap">Hours: {c.hours}</p>}
+                    {c.insurance_note && <p>Insurance: {c.insurance_note}</p>}
+                    {c.updated_at && c.status === "approved" && (
+                      <p className="text-xs text-gray-500">Last edited {new Date(c.updated_at).toLocaleString()}</p>
+                    )}
                   </div>
                 )}
 
@@ -232,6 +262,7 @@ export function AdminClaims() {
             </Card>
           ))}
         </div>
+        </>)}
       </main>
     </div>
   );

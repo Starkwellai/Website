@@ -2453,6 +2453,17 @@ def _reviews_db() -> sqlite3.Connection:
         )
     """)
     con.execute("CREATE INDEX IF NOT EXISTS idx_reviews_facility ON reviews(facility_key)")
+    # A practice can reply to and report reviews of its approved locations, and the owner can
+    # hide a review (added 2026-10-08). Hidden reviews are kept, not deleted, so a decision can
+    # be undone and there is a record of what was removed.
+    have = {r[1] for r in con.execute("PRAGMA table_info(reviews)")}
+    for col, ddl in (("reply_text", "TEXT"), ("reply_at", "TEXT"), ("flagged_at", "TEXT"),
+                     ("flag_reason", "TEXT"), ("hidden", "INTEGER NOT NULL DEFAULT 0")):
+        if col not in have:
+            try:
+                con.execute(f"ALTER TABLE reviews ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError:
+                pass  # another request added it first
     con.row_factory = sqlite3.Row
     return con
 
@@ -2557,8 +2568,8 @@ def get_reviews(facility_key: str):
     con = _reviews_db()
     try:
         rows = con.execute(
-            "SELECT source, rating, comment, author_name, created_at FROM reviews "
-            "WHERE facility_key = ? ORDER BY created_at DESC", (facility_key,)
+            "SELECT source, rating, comment, author_name, created_at, reply_text, reply_at FROM reviews "
+            "WHERE facility_key = ? AND hidden = 0 ORDER BY created_at DESC", (facility_key,)
         ).fetchall()
     finally:
         con.close()
@@ -2639,7 +2650,10 @@ def _provider_db() -> sqlite3.Connection:
     # 'pending' is the default so a claim made before this existed is NOT treated as
     # approved: none of them were ever checked.
     have = {r[1] for r in con.execute("PRAGMA table_info(claimed_listings)")}
-    for col, ddl in (("status", "TEXT NOT NULL DEFAULT 'pending'"), ("reviewed_at", "TEXT"), ("review_note", "TEXT")):
+    for col, ddl in (("status", "TEXT NOT NULL DEFAULT 'pending'"), ("reviewed_at", "TEXT"), ("review_note", "TEXT"),
+                     # practice-written details for the public page (added 2026-10-08)
+                     ("phone", "TEXT"), ("website", "TEXT"), ("hours", "TEXT"),
+                     ("insurance_note", "TEXT"), ("updated_at", "TEXT")):
         if col not in have:
             try:
                 con.execute(f"ALTER TABLE claimed_listings ADD COLUMN {col} {ddl}")
@@ -2789,6 +2803,67 @@ def provider_signup(body: ProviderSignupBody, request: Request):
     return {"token": token, "practice_name": body.practice_name.strip(), "contact_name": body.contact_name.strip(), "email": email}
 
 
+class UpdateAccountBody(BaseModel):
+    practice_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    contact_name: Optional[str] = Field(None, min_length=1, max_length=120)
+    phone: Optional[str] = Field(None, max_length=40)
+
+
+@app.put("/api/provider/me")
+def update_provider_account(body: UpdateAccountBody, request: Request):
+    """Edit the account's own details. Email is not editable: there is no way yet to confirm
+    the new address belongs to them. The public page shows the reviewed location name, not
+    practice_name, so renaming the account does not change anything patients see."""
+    provider = _require_provider(request)
+    sent = {f: (getattr(body, f) or "").strip() for f in ("practice_name", "contact_name", "phone")
+            if f in body.model_fields_set and getattr(body, f) is not None}
+    for required in ("practice_name", "contact_name"):
+        if required in sent and not sent[required]:
+            raise HTTPException(422, "That can't be empty.")
+    if not sent:
+        raise HTTPException(422, "Nothing to update.")
+    con = _provider_db()
+    try:
+        con.execute(f"UPDATE provider_accounts SET {', '.join(f + ' = ?' for f in sent)} WHERE id = ?",
+                    (*[v or None for v in sent.values()], provider["id"]))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=200)
+    new_password: str = Field(..., min_length=8, max_length=200)
+
+
+@app.post("/api/provider/password")
+def change_provider_password(body: ChangePasswordBody, request: Request):
+    """Needs the current password (a stolen session alone can't lock the owner out), then signs
+    every OTHER device out. Wrong attempts share the login rate limit."""
+    provider = _require_provider(request)
+    _check_provider_auth_rate_limit(_client_ip(request))
+    auth = request.headers.get("authorization", "")
+    token = auth[len("Bearer "):].strip()
+    con = _provider_db()
+    try:
+        row = con.execute("SELECT password_hash, password_salt FROM provider_accounts WHERE id = ?",
+                          (provider["id"],)).fetchone()
+        if row is None or row["password_hash"] is None:
+            _hash_password(body.current_password, _DUMMY_PASSWORD_SALT)   # same cost either way
+            raise HTTPException(403, "Current password is incorrect.")
+        if not _verify_password(body.current_password, row["password_hash"], row["password_salt"]):
+            raise HTTPException(403, "Current password is incorrect.")
+        new_hash, new_salt = _hash_password(body.new_password)
+        con.execute("UPDATE provider_accounts SET password_hash = ?, password_salt = ? WHERE id = ?",
+                    (new_hash, new_salt, provider["id"]))
+        con.execute("DELETE FROM provider_sessions WHERE provider_id = ? AND token <> ?", (provider["id"], token))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
 @app.post("/api/provider-login")
 def provider_login(body: ProviderLoginBody, request: Request):
     client_ip = _client_ip(request)
@@ -2915,8 +2990,8 @@ def my_listings(request: Request):
     con = _provider_db()
     try:
         rows = con.execute(
-            "SELECT facility_key, facility_label, address, city, description, claimed_at, status, review_note "
-            "FROM claimed_listings WHERE provider_id = ? ORDER BY claimed_at DESC",
+            "SELECT facility_key, facility_label, address, city, description, claimed_at, status, review_note, "
+            "phone, website, hours, insurance_note FROM claimed_listings WHERE provider_id = ? ORDER BY claimed_at DESC",
             (provider["id"],),
         ).fetchall()
     finally:
@@ -2925,7 +3000,26 @@ def my_listings(request: Request):
 
 
 class UpdateListingBody(BaseModel):
-    description: str = Field(..., max_length=1000)
+    """Only the fields that are sent are changed; an empty string clears a field."""
+    description: Optional[str] = Field(None, max_length=1000)
+    phone: Optional[str] = Field(None, max_length=40)
+    website: Optional[str] = Field(None, max_length=200)
+    hours: Optional[str] = Field(None, max_length=300)
+    insurance_note: Optional[str] = Field(None, max_length=300)
+
+
+_LISTING_FIELDS = ("description", "phone", "website", "hours", "insurance_note")
+
+
+def _clean_website(value: str) -> Optional[str]:
+    """http(s) links only (never javascript: and friends), no spaces, so the public page can
+    safely render it as a link."""
+    v = value.strip()
+    if not v:
+        return None
+    if not re.fullmatch(r"https?://[^\s<>\"']+\.[^\s<>\"']+", v, flags=re.IGNORECASE):
+        raise HTTPException(422, "Enter the website as a full address starting with http:// or https://")
+    return v
 
 
 @app.put("/api/provider/listings/{facility_key}")
@@ -2939,10 +3033,13 @@ def update_listing(facility_key: str, body: UpdateListingBody, request: Request)
         ).fetchone()
         if row is None:
             raise HTTPException(404, "You haven't claimed this listing.")
-        con.execute(
-            "UPDATE claimed_listings SET description = ? WHERE id = ?",
-            (body.description.strip() or None, row["id"]),
-        )
+        sent = {f: getattr(body, f) for f in _LISTING_FIELDS if f in body.model_fields_set and getattr(body, f) is not None}
+        if not sent:
+            raise HTTPException(422, "Nothing to update.")
+        values = {f: ((_clean_website(v) if f == "website" else v.strip()) or None) for f, v in sent.items()}
+        sets = ", ".join(f"{f} = ?" for f in values) + ", updated_at = ?"
+        con.execute(f"UPDATE claimed_listings SET {sets} WHERE id = ?",
+                    (*values.values(), datetime.now(timezone.utc).isoformat(), row["id"]))
         con.commit()
     finally:
         con.close()
@@ -2976,7 +3073,8 @@ def public_listing(facility_key: str):
     con = _provider_db()
     try:
         rows = con.execute(
-            "SELECT cl.facility_label, cl.description, cl.claimed_at, pa.practice_name, pa.phone "
+            "SELECT cl.facility_label, cl.description, cl.claimed_at, cl.facility_label AS practice_name, "
+            "COALESCE(cl.phone, pa.phone) AS phone, cl.website, cl.hours, cl.insurance_note "
             "FROM claimed_listings cl JOIN provider_accounts pa ON pa.id = cl.provider_id "
             "WHERE cl.facility_key = ? AND cl.status = 'approved' ORDER BY cl.claimed_at ASC",
             (facility_key,),
@@ -2985,6 +3083,107 @@ def public_listing(facility_key: str):
         con.close()
     return {"facility_key": facility_key, "claims": [dict(r) for r in rows],
             "appointment_requests_enabled": APPOINTMENT_REQUESTS_ENABLED}
+
+
+# ---- reviews of a practice's own locations ------------------------------------
+# A practice sees the public reviews of its APPROVED locations, can reply once per review
+# (the reply is public, under the review) and can report a review to the owner. It cannot
+# remove a review: only the owner can hide one.
+
+def _approved_locations(provider_id: int) -> dict[str, str]:
+    con = _provider_db()
+    try:
+        rows = con.execute("SELECT facility_key, facility_label FROM claimed_listings "
+                           "WHERE provider_id = ? AND status = 'approved'", (provider_id,)).fetchall()
+    finally:
+        con.close()
+    return {r["facility_key"]: r["facility_label"] for r in rows}
+
+
+def _review_for_provider(review_id: int, provider_id: int) -> tuple[sqlite3.Connection, sqlite3.Row]:
+    """The review row, only if it belongs to one of this provider's approved locations."""
+    locs = _approved_locations(provider_id)
+    con = _reviews_db()
+    row = con.execute("SELECT * FROM reviews WHERE id = ? AND hidden = 0", (review_id,)).fetchone()
+    if row is None or row["facility_key"] not in locs:
+        con.close()
+        raise HTTPException(404, "Review not found.")
+    return con, row
+
+
+@app.get("/api/provider/reviews")
+def my_reviews(request: Request):
+    provider = _require_provider(request)
+    locs = _approved_locations(provider["id"])
+    if not locs:
+        return {"locations": [], "reviews": []}
+    con = _reviews_db()
+    try:
+        marks = ",".join("?" * len(locs))
+        rows = con.execute(
+            f"SELECT id, facility_key, rating, comment, author_name, created_at, reply_text, reply_at, flagged_at "
+            f"FROM reviews WHERE facility_key IN ({marks}) AND hidden = 0 ORDER BY created_at DESC LIMIT 200",
+            list(locs)).fetchall()
+    finally:
+        con.close()
+    reviews = [{**dict(r), "facility_label": locs[r["facility_key"]]} for r in rows]
+    summary = []
+    for key, label in locs.items():
+        ratings = [r["rating"] for r in reviews if r["facility_key"] == key]
+        summary.append({"facility_key": key, "facility_label": label, "count": len(ratings),
+                        "average": round(sum(ratings) / len(ratings), 1) if ratings else None})
+    return {"locations": summary, "reviews": reviews}
+
+
+class ReplyBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+
+
+@app.put("/api/provider/reviews/{review_id}/reply")
+def reply_to_review(review_id: int, body: ReplyBody, request: Request):
+    provider = _require_provider(request)
+    con, _row = _review_for_provider(review_id, provider["id"])
+    try:
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "Write a reply first.")
+        con.execute("UPDATE reviews SET reply_text = ?, reply_at = ? WHERE id = ?",
+                    (text, datetime.now(timezone.utc).isoformat(), review_id))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+@app.delete("/api/provider/reviews/{review_id}/reply")
+def delete_review_reply(review_id: int, request: Request):
+    provider = _require_provider(request)
+    con, _row = _review_for_provider(review_id, provider["id"])
+    try:
+        con.execute("UPDATE reviews SET reply_text = NULL, reply_at = NULL WHERE id = ?", (review_id,))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+class FlagBody(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=300)
+
+
+@app.post("/api/provider/reviews/{review_id}/flag")
+def flag_review(review_id: int, body: FlagBody, request: Request):
+    provider = _require_provider(request)
+    con, row = _review_for_provider(review_id, provider["id"])
+    try:
+        if row["flagged_at"]:
+            raise HTTPException(409, "You've already reported this review.")
+        con.execute("UPDATE reviews SET flagged_at = ?, flag_reason = ? WHERE id = ?",
+                    (datetime.now(timezone.utc).isoformat(), body.reason.strip(), review_id))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
 
 
 # ---- claim review (owner only) ------------------------------------------------
@@ -3048,7 +3247,8 @@ def admin_claims(request: Request, status: str = Query("pending", pattern="^(pen
         where, params = ("", []) if status == "all" else ("WHERE cl.status = ?", [status])
         rows = con.execute(
             "SELECT cl.id, cl.status, cl.facility_key, cl.facility_label, cl.address, cl.city, cl.description, "
-            "cl.claimed_at, cl.reviewed_at, cl.review_note, pa.practice_name, pa.contact_name, pa.email, "
+            "cl.claimed_at, cl.reviewed_at, cl.review_note, cl.phone AS listing_phone, cl.website, cl.hours, "
+            "cl.insurance_note, cl.updated_at, pa.practice_name, pa.contact_name, pa.email, "
             "pa.phone, pa.npi, pa.specialty, pa.city AS provider_city, pa.state AS provider_state, pa.message "
             f"FROM claimed_listings cl JOIN provider_accounts pa ON pa.id = cl.provider_id {where} "
             "ORDER BY cl.claimed_at DESC LIMIT 200", params).fetchall()
@@ -3086,6 +3286,60 @@ def admin_decide_claim(claim_id: int, body: ClaimDecisionBody, request: Request)
     finally:
         con.close()
     return {"ok": True, "id": claim_id, "status": body.decision}
+
+
+@app.get("/api/admin/reviews")
+def admin_reviews(request: Request, view: str = Query("flagged", pattern="^(flagged|hidden|recent)$")):
+    """flagged = reported by a practice and not yet looked at; hidden = removed from the public
+    page; recent = the newest reviews anywhere, so spam can be caught without a report."""
+    _require_admin(request)
+    where = {"flagged": "flagged_at IS NOT NULL AND hidden = 0", "hidden": "hidden = 1", "recent": "hidden = 0"}[view]
+    order = "flagged_at DESC" if view == "flagged" else "created_at DESC"
+    con = _reviews_db()
+    try:
+        rows = con.execute(
+            f"SELECT id, facility_key, rating, comment, author_name, created_at, reply_text, flagged_at, flag_reason, hidden "
+            f"FROM reviews WHERE {where} ORDER BY {order} LIMIT 200").fetchall()
+        counts = {"flagged": con.execute("SELECT count(*) FROM reviews WHERE flagged_at IS NOT NULL AND hidden = 0").fetchone()[0],
+                  "hidden": con.execute("SELECT count(*) FROM reviews WHERE hidden = 1").fetchone()[0]}
+    finally:
+        con.close()
+    pcon = _provider_db()
+    try:
+        labels = {r["facility_key"]: (r["facility_label"], r["address"], r["city"]) for r in pcon.execute(
+            "SELECT facility_key, facility_label, address, city FROM claimed_listings").fetchall()}
+    finally:
+        pcon.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        lab = labels.get(d["facility_key"])
+        d["location"] = f"{lab[0]} — {lab[1]}, {lab[2]}" if lab else None
+        out.append(d)
+    return {"counts": counts, "reviews": out}
+
+
+class ReviewVisibilityBody(BaseModel):
+    action: str = Field(..., pattern="^(hide|restore|dismiss_flag)$")
+
+
+@app.post("/api/admin/reviews/{review_id}/decision")
+def admin_decide_review(review_id: int, body: ReviewVisibilityBody, request: Request):
+    _require_admin(request)
+    con = _reviews_db()
+    try:
+        if con.execute("SELECT id FROM reviews WHERE id = ?", (review_id,)).fetchone() is None:
+            raise HTTPException(404, "Review not found.")
+        if body.action == "hide":
+            con.execute("UPDATE reviews SET hidden = 1 WHERE id = ?", (review_id,))
+        elif body.action == "restore":
+            con.execute("UPDATE reviews SET hidden = 0 WHERE id = ?", (review_id,))
+        else:
+            con.execute("UPDATE reviews SET flagged_at = NULL, flag_reason = NULL WHERE id = ?", (review_id,))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True, "id": review_id, "action": body.action}
 
 
 # ---- appointment requests ---------------------------------------------------

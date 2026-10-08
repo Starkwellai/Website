@@ -234,6 +234,14 @@ appointment requests). You review them at **https://starkwellhealth.com/admin/cl
   confirm), and what the NPI they typed belongs to in the federal registry data (and whether it
   is at the same street address). Approve, "Don't approve" (with an optional note the practice
   can see), or move it back to waiting.
+- The same screen has a **Patient reviews** tab. Reviews are anonymous and unverified, so nothing
+  is removed automatically: a practice can *Report* a review (with a reason) from its dashboard
+  and it shows up under "Reported" for you; "Newest" lets you spot spam without a report. *Hide
+  from the site* takes a review off the public page and out of the counts but keeps it, so it can
+  be restored; "Dismiss the report" clears the report and keeps the review.
+- What a practice can edit once its location is approved (phone, website, hours, insurance note,
+  description) goes public immediately, with no second review. The claim card shows what will be
+  published and, once approved, when it was last edited, so you can spot-check.
 - There is no email alert yet when a claim arrives, so check the page now and then; the count
   on the "Waiting for review" tab is the number to watch.
 - To change the admin code: edit `STARKWELL_ADMIN_TOKEN` in `/root/starkwell.env`, then run a

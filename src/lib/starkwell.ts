@@ -343,6 +343,9 @@ export interface Review {
   comment: string | null;
   author_name: string | null;
   created_at: string;
+  /** A public reply from the practice that claimed this location, if any. */
+  reply_text?: string | null;
+  reply_at?: string | null;
 }
 
 export interface ReviewSourceSummary {
@@ -800,7 +803,20 @@ export interface ClaimedListing {
   status: ClaimStatus;
   /** The reviewer's note, shown when a claim was not approved. */
   review_note: string | null;
+  /** Details the practice writes for its public page (shown once the claim is approved). */
+  phone: string | null;
+  website: string | null;
+  hours: string | null;
+  insurance_note: string | null;
 }
+
+export type ListingDetails = Partial<{
+  description: string;
+  phone: string;
+  website: string;
+  hours: string;
+  insurance_note: string;
+}>;
 
 export type ClaimStatus = "pending" | "approved" | "rejected";
 
@@ -811,11 +827,12 @@ export async function getMyListings(): Promise<ClaimedListing[]> {
   return r.listings;
 }
 
-export async function updateListingDescription(facilityKey: string, description: string): Promise<void> {
+/** Only the fields you pass are changed; an empty string clears a field. */
+export async function updateListing(facilityKey: string, fields: ListingDetails): Promise<void> {
   const res = await fetch(`${BASE}/provider/listings/${encodeURIComponent(facilityKey)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ..._authHeaders() },
-    body: JSON.stringify({ description }),
+    body: JSON.stringify(fields),
   });
   if (!res.ok) throw new Error(await readErrorDetail(res));
 }
@@ -833,6 +850,9 @@ export interface PublicListingClaim {
   description: string | null;
   practice_name: string;
   phone: string | null;
+  website: string | null;
+  hours: string | null;
+  insurance_note: string | null;
 }
 
 export interface PublicListing {
@@ -1058,6 +1078,12 @@ export interface AdminClaim {
   provider_city: string | null;
   provider_state: string | null;
   message: string | null;
+  /** What the practice wrote for its public page (shown only once approved). */
+  listing_phone: string | null;
+  website: string | null;
+  hours: string | null;
+  insurance_note: string | null;
+  updated_at: string | null;
   /** Phone numbers on file for the claimed address, to call and confirm. */
   published_phones: string[];
   /** What the NPI the claimant typed belongs to in the federal registry data. */
@@ -1078,6 +1104,111 @@ export async function adminDecideClaim(token: string, id: number, decision: Clai
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ decision, note: note?.trim() || undefined }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await readErrorDetail(res)}`);
+}
+
+// ---- practice account: edit details, change password ----
+
+export async function updateMyAccount(fields: Partial<{ practice_name: string; contact_name: string; phone: string }>): Promise<void> {
+  const res = await fetch(`${BASE}/provider/me`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export async function changeMyPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+// ---- reviews of a practice's own (approved) locations ----
+
+export interface ProviderReview {
+  id: number;
+  facility_key: string;
+  facility_label: string;
+  rating: number;
+  comment: string | null;
+  author_name: string | null;
+  created_at: string;
+  reply_text: string | null;
+  reply_at: string | null;
+  flagged_at: string | null;
+}
+
+export interface ProviderReviewSummary {
+  facility_key: string;
+  facility_label: string;
+  count: number;
+  average: number | null;
+}
+
+export async function getMyReviews(): Promise<{ locations: ProviderReviewSummary[]; reviews: ProviderReview[] }> {
+  const res = await fetch(`${BASE}/provider/reviews`, { headers: _authHeaders() });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+  return res.json();
+}
+
+export async function replyToReview(id: number, text: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/reviews/${id}/reply`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export async function deleteReviewReply(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/provider/reviews/${id}/reply`, { method: "DELETE", headers: _authHeaders() });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+export async function flagReview(id: number, reason: string): Promise<void> {
+  const res = await fetch(`${BASE}/provider/reviews/${id}/flag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ..._authHeaders() },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) throw new Error(await readErrorDetail(res));
+}
+
+// ---- owner-only review moderation (see api/serving_api.py) ----
+
+export interface AdminReview {
+  id: number;
+  facility_key: string;
+  location: string | null;
+  rating: number;
+  comment: string | null;
+  author_name: string | null;
+  created_at: string;
+  reply_text: string | null;
+  flagged_at: string | null;
+  flag_reason: string | null;
+  hidden: number;
+}
+
+export type AdminReviewView = "flagged" | "recent" | "hidden";
+export type AdminReviewAction = "hide" | "restore" | "dismiss_flag";
+
+export async function adminListReviews(token: string, view: AdminReviewView): Promise<{ reviews: AdminReview[]; counts: { flagged: number; hidden: number } }> {
+  const res = await fetch(`${BASE}/admin/reviews?view=${view}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`${res.status} ${await readErrorDetail(res)}`);
+  return res.json();
+}
+
+export async function adminDecideReview(token: string, id: number, action: AdminReviewAction): Promise<void> {
+  const res = await fetch(`${BASE}/admin/reviews/${id}/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action }),
   });
   if (!res.ok) throw new Error(`${res.status} ${await readErrorDetail(res)}`);
 }

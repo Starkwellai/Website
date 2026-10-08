@@ -34,6 +34,7 @@ import {
 import {
   getSavedServices, getSavedFacilities, toggleSavedService, toggleSavedFacility,
 } from "../../lib/savedItems";
+import { PracticeDetails } from "../components/PracticeDetails";
 
 /** HCAHPS publishes a derived "_STAR_RATING" for these same questions, but
  *  in this dataset every one of them is null for all 48 facilities that
@@ -1152,7 +1153,7 @@ export function PriceSearch() {
                           {c.description && (
                             <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.description}</p>
                           )}
-                          {c.phone && <p className="text-sm text-gray-600 mt-1">{c.phone}</p>}
+                          <PracticeDetails claim={c} />
                         </div>
                       ))}
 
@@ -1369,6 +1370,14 @@ export function PriceSearch() {
                                 </span>
                               </div>
                               {r.comment && <p className="text-sm text-gray-700 mt-1">{r.comment}</p>}
+                              {r.reply_text && (
+                                <div className="mt-2 ml-3 pl-3 border-l-2 border-teal-200">
+                                  <p className="text-xs text-gray-500">
+                                    Response from the practice{r.reply_at ? ` · ${new Date(r.reply_at).toLocaleDateString()}` : ""}
+                                  </p>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.reply_text}</p>
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>
