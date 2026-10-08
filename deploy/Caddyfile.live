@@ -1,0 +1,18 @@
+# Copy of /etc/caddy/Caddyfile on the droplet, kept here so the server config is in version control.
+# NOTE: the port in the reverse_proxy line (8080 or 8081) is flipped by deploy/swap.sh on every
+# deploy, so it will differ from the server at times. Edit the server file, then update this copy.
+# Starkwell: HTTPS in front of the app. The app only listens on 127.0.0.1:8080,
+# so this is the only public way in. Certificates are obtained and renewed automatically.
+starkwellhealth.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+}
+
+www.starkwellhealth.com {
+	redir https://starkwellhealth.com{uri} permanent
+}
+
+# Plain http:// to anything else (the bare server address, other names) goes to the real site.
+http:// {
+	redir https://starkwellhealth.com{uri} permanent
+}
