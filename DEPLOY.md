@@ -305,7 +305,9 @@ sends `www` and plain `http://` (including the bare IP) to
   reload, checks the site through Caddy over HTTPS, then retires the old
   container. Anything that fails before the switch leaves the live site
   untouched; a failed check after it puts Caddy back on the old container.
-  Verified with a probe: 169 of 169 requests succeeded across a swap. To see
+  Verified with a probe (one request per second through three swaps): 520 of 521
+  succeeded; the one failure was a connection that arrived in the moment Caddy
+  reloaded (about a second), so "near-zero" downtime, not literally zero. To see
   which port is live: `grep reverse_proxy /etc/caddy/Caddyfile`. Container
   names are `starkwell-8080` / `starkwell-8081` (the one named plain
   `starkwell` was the pre-swap original).
