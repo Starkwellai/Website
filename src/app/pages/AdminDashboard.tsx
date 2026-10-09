@@ -24,9 +24,9 @@ import {
   Database,
   Server,
 } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { PHIIndicator } from "../components/PHIIndicator";
 import { RoleSwitcher } from "../components/RoleSwitcher";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * HIPAA compliance / admin dashboard shell.
@@ -58,53 +58,45 @@ export function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-2 md:px-4 py-2">
-          <div className="flex items-center justify-between">
-            <img
-              src={logo}
-              alt="Starkwell"
-              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <div className="flex items-center gap-2 md:gap-4">
-              <RoleSwitcher />
-              <Badge variant="outline" className="border-purple-600 text-purple-600 bg-purple-50">
-                Admin Access
-              </Badge>
-              <Button variant="ghost" size="sm" className="text-gray-600" onClick={() => navigate("/notifications")}>
-                <Bell className="size-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="text-gray-600" onClick={() => navigate("/settings")}>
-                <Settings className="size-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="text-gray-600">
-                    <User className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56">
-                  <DropdownMenuLabel>Admin Account</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => navigate("/profile")}>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/audit-log")}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    <span>Audit Log</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/")}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Logout</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        right={
+          <>
+                <RoleSwitcher />
+                <Badge variant="outline" className="border-white/70 text-white bg-white/15">
+                  Admin Access
+                </Badge>
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/15 hover:text-white" onClick={() => navigate("/notifications")}>
+                  <Bell className="size-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/15 hover:text-white" onClick={() => navigate("/settings")}>
+                  <Settings className="size-4" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-white hover:bg-white/15 hover:text-white">
+                      <User className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56">
+                    <DropdownMenuLabel>Admin Account</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => navigate("/profile")}>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/audit-log")}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      <span>Audit Log</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/")}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+          </>
+        }
+      />
 
       <div className="container mx-auto px-4 md:px-6 py-6 md:py-8">
         <div className="mb-6 md:mb-8">
