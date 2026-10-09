@@ -1,10 +1,9 @@
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
-import { SiteNav } from "../components/SiteNav";
 import { ComingSoonBadge } from "../components/ComingSoonBadge";
 import { Search, Building2, Pill, Bookmark } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Where every patient "Sign up / Log in" button lands. There is no patient
@@ -25,14 +24,7 @@ export function AccountsComingSoon() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-2">
-          <div className="flex items-center justify-between">
-            <img src={logo} alt="Starkwell" className="h-9 md:h-12 cursor-pointer rounded-[5px]" onClick={() => navigate("/")} />
-            <SiteNav ctaTo="/signup-consumer" ctaLabel="Accounts: Coming Soon" />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="container mx-auto px-6 py-12 max-w-3xl">
         <div className="mb-3"><ComingSoonBadge /></div>

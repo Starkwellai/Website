@@ -11,9 +11,10 @@ import { Menu, X } from "lucide-react";
  * overlapping targets — no horizontal overflow, so it was easy to miss, but
  * unusable on a phone.
  *
- * Desktop keeps the existing horizontal row. Below `md` the links collapse
- * behind a hamburger. Defined once here so the pages stay in sync; previously
- * adding "Compare Prices" meant editing four files and I only edited one.
+ * Wide screens get one row, larger type, spread evenly across the whole bar
+ * (the "brand" look used by SiteHeader). Below that the links collapse behind a
+ * hamburger. Defined once here so the pages stay in sync; previously adding
+ * "Compare Prices" meant editing four files and I only edited one.
  */
 
 interface NavLink {
@@ -49,17 +50,18 @@ export function SiteNav({ ctaTo = "/signup-consumer",
 
   // Close on Escape, and whenever the viewport grows past the breakpoint —
   // otherwise resizing with the menu open leaves an orphaned panel over the
-  // desktop layout.
+  // desktop layout. The brand row needs 1280px for larger type; the light one 1024px.
   useEffect(() => {
+    const wide = brand ? 1280 : 1024;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const onResize = () => { if (window.innerWidth >= 1024) setOpen(false); };
+    const onResize = () => { if (window.innerWidth >= wide) setOpen(false); };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [brand]);
 
   const go = (to?: string) => {
     setOpen(false);
@@ -68,35 +70,50 @@ export function SiteNav({ ctaTo = "/signup-consumer",
 
   return (
     <>
-      {/* Desktop */}
-      <div className={`hidden lg:flex items-center ${brand ? "gap-1" : "gap-6"}`}>
-        {LINKS.map(l => (
-          <Button
-            key={l.label}
-            variant="ghost"
-            className={brand ? "text-white/95 hover:text-white hover:bg-white/15" : "text-gray-700 hover:text-blue-600"}
-            onClick={() => go(l.to)}
-          >
-            {l.label}
+      {/* Desktop. Brand: fills the space beside the logo, items evenly spaced, type that grows with
+          the screen (17px from 1280, 18px from 1400, 20px from 1536); each size was measured to
+          fit on one line at its smallest width. Light: the original compact row. */}
+      {brand ? (
+        <div className="hidden xl:flex flex-1 items-center justify-evenly pl-4">
+          {LINKS.map(l => (
+            <Button
+              key={l.label}
+              variant="ghost"
+              className="text-[17px] min-[1400px]:text-[18px] 2xl:text-xl font-medium px-2 min-[1400px]:px-3 h-11 text-white/95 hover:text-white hover:bg-white/15"
+              onClick={() => go(l.to)}
+            >
+              {l.label}
+            </Button>
+          ))}
+          <Button onClick={() => go(ctaTo)}
+                  className="text-[17px] min-[1400px]:text-[18px] 2xl:text-xl h-11 px-4 min-[1400px]:px-5 bg-white text-blue-700 hover:bg-blue-50 font-semibold">
+            {ctaLabel}
           </Button>
-        ))}
-        <Button onClick={() => go(ctaTo)}
-                className={brand ? "ml-2 bg-white text-blue-700 hover:bg-blue-50 font-semibold" : "bg-blue-600 hover:bg-blue-700"}>
-          {ctaLabel}
-        </Button>
-      </div>
+        </div>
+      ) : (
+        <div className="hidden lg:flex items-center gap-6">
+          {LINKS.map(l => (
+            <Button key={l.label} variant="ghost" className="text-gray-700 hover:text-blue-600" onClick={() => go(l.to)}>
+              {l.label}
+            </Button>
+          ))}
+          <Button onClick={() => go(ctaTo)} className="bg-blue-600 hover:bg-blue-700">
+            {ctaLabel}
+          </Button>
+        </div>
+      )}
 
       {/* Mobile trigger */}
       <button
         type="button"
-        className={`lg:hidden inline-flex items-center justify-center rounded-md p-2 focus:outline-none focus-visible:ring-2 ${
+        className={`${brand ? "xl:hidden" : "lg:hidden"} inline-flex items-center justify-center rounded-md p-2 focus:outline-none focus-visible:ring-2 ${
           brand ? "text-white hover:bg-white/15 focus-visible:ring-white" : "text-gray-700 hover:bg-gray-100 focus-visible:ring-blue-500"}`}
         aria-expanded={open}
         aria-controls="site-nav-mobile"
         aria-label={open ? "Close menu" : "Open menu"}
         onClick={() => setOpen(v => !v)}
       >
-        {open ? <X className="size-6" /> : <Menu className="size-6" />}
+        {open ? <X className="size-7" /> : <Menu className="size-7" />}
       </button>
 
       {/* Mobile panel. Rendered as a sibling below the header bar rather than a
@@ -105,7 +122,7 @@ export function SiteNav({ ctaTo = "/signup-consumer",
       {open && (
         <div
           id="site-nav-mobile"
-          className="lg:hidden absolute left-0 right-0 top-full border-t border-gray-100 bg-white shadow-lg"
+          className={`${brand ? "xl:hidden" : "lg:hidden"} absolute left-0 right-0 top-full border-t border-gray-100 bg-white shadow-lg`}
         >
           <nav className="container mx-auto px-6 py-2 flex flex-col">
             {LINKS.map(l => (
@@ -113,7 +130,7 @@ export function SiteNav({ ctaTo = "/signup-consumer",
                 key={l.label}
                 type="button"
                 onClick={() => go(l.to)}
-                className="w-full text-left py-3 text-gray-700 hover:text-blue-600 border-b border-gray-100 last:border-b-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="w-full text-left py-3 text-lg text-gray-700 hover:text-blue-600 border-b border-gray-100 last:border-b-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 {l.label}
               </button>

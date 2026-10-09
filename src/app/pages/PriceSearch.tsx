@@ -19,8 +19,6 @@ import { Search, MapPin, Info, AlertTriangle, ArrowLeft, Star, Scale, X, ShieldC
 import { ProviderMap, type MapPoint } from "../components/ProviderMap";
 import { GlossaryTerm } from "../components/GlossaryTerm";
 import { AppointmentRequestsNotLive } from "../components/AppointmentRequestsNotLive";
-import { SiteNav } from "../components/SiteNav";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   searchServicesWithToken, aiSearchServices, getFacilities, getProviders, listCategories, listPlans,
   getCashPrices, getFacilityQuality, getFacilityReviews, submitFacilityReview,
@@ -35,6 +33,7 @@ import {
   getSavedServices, getSavedFacilities, toggleSavedService, toggleSavedFacility,
 } from "../../lib/savedItems";
 import { PracticeDetails } from "../components/PracticeDetails";
+import { SiteHeader } from "../components/SiteHeader";
 
 /** HCAHPS publishes a derived "_STAR_RATING" for these same questions, but
  *  in this dataset every one of them is null for all 48 facilities that
@@ -681,19 +680,7 @@ export function PriceSearch() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="relative bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-2">
-          <div className="flex items-center justify-between">
-            <img
-              src={logo}
-              alt="Starkwell"
-              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <SiteNav />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className={`container mx-auto px-6 py-8 max-w-7xl ${
         (!facility && compareFacilities.length > 0) || (facility && compareProviders.length > 0)

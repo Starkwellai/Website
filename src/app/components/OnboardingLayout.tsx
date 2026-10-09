@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "./SiteHeader";
 
 interface OnboardingLayoutProps {
   children: ReactNode;
@@ -20,35 +20,7 @@ export function OnboardingLayout({ children, currentStep, totalSteps, onBack }: 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-blue-100">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBack}
-                className="gap-2"
-              >
-                <ChevronLeft className="size-4" />
-                Back
-              </Button>
-              <img 
-                src={logo} 
-                alt="Starkwell" 
-                className="h-12 cursor-pointer rounded-[5px]"
-                onClick={() => navigate("/")}
-              />
-            </div>
-            {/* Progress indicator */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">
-                Step {currentStep} of {totalSteps}
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader minimal />
 
       {/* Progress Bar */}
       <div className="bg-white border-b border-blue-100">

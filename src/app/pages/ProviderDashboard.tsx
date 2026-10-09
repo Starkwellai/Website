@@ -9,11 +9,11 @@ import { ProviderReviewsCard } from "../components/ProviderReviewsCard";
 import { ProviderAccountCard } from "../components/ProviderAccountCard";
 import { AppointmentRequestsCard } from "../components/AppointmentRequestsCard";
 import { Building2, CalendarClock, ClipboardCheck, LogOut, Star } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   getCurrentProviderAccount, logoutProviderAccount, getMyListings, getMyReviews, getAppointmentRequests,
   type ProviderAccount, type ClaimedListing, type ProviderReviewSummary,
 } from "../../lib/starkwell";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * A practice's home: its locations and what patients see for each, the reviews it has
@@ -99,23 +99,20 @@ export function ProviderDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-2 md:px-4 py-2">
-          <div className="flex items-center justify-between">
-            <img src={logo} alt="Starkwell" className="h-9 md:h-12 cursor-pointer rounded-[5px]" onClick={() => navigate("/")} />
-            <div className="flex items-center gap-2 md:gap-4">
-              <Badge variant="outline" className="border-green-600 text-green-700 bg-green-50 hidden sm:inline-flex">
-                Practice account
-              </Badge>
-              <span className="text-sm text-gray-600 hidden md:inline">{providerName}</span>
-              <Button variant="ghost" size="sm" className="text-gray-700" onClick={handleLogout}>
-                <LogOut className="mr-2 size-4" />
-                Log out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        right={
+          <>
+            <Badge variant="outline" className="border-white/70 text-white bg-white/15 hidden sm:inline-flex">
+              Practice account
+            </Badge>
+            <span className="text-base text-white hidden md:inline">{providerName}</span>
+            <Button variant="ghost" size="sm" className="text-white hover:bg-white/15 hover:text-white" onClick={handleLogout}>
+              <LogOut className="mr-2 size-4" />
+              Log out
+            </Button>
+          </>
+        }
+      />
 
       <div className="container mx-auto px-4 md:px-6 py-6 md:py-8">
         <div className="mb-6">

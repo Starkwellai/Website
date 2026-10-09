@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../co
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { AlertCircle, ArrowRight, Building2 } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { loginProviderAccount } from "../../lib/starkwell";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Practice log-in at /provider-login. Switched back on 2026-10-07, once the site
@@ -40,16 +40,7 @@ export function ProviderLogin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex flex-col">
-      <header className="bg-white border-b border-blue-100">
-        <div className="container mx-auto px-2 md:px-4 py-4">
-          <img
-            src={logo}
-            alt="Starkwell"
-            className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-            onClick={() => navigate("/")}
-          />
-        </div>
-      </header>
+      <SiteHeader minimal />
 
       <main className="container mx-auto px-6 py-16 flex-1 flex items-start justify-center">
         <div className="max-w-md w-full">

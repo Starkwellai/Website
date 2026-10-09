@@ -2,7 +2,7 @@ import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { CheckCircle, Mail } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Shown right after a real POST /api/provider-signup succeeds. This used to
@@ -18,16 +18,7 @@ export function ProviderVerificationPending() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex flex-col">
-      <header className="bg-white border-b border-blue-100">
-        <div className="container mx-auto px-2 md:px-4 py-4">
-          <img
-            src={logo}
-            alt="Starkwell"
-            className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-            onClick={() => navigate("/")}
-          />
-        </div>
-      </header>
+      <SiteHeader minimal />
 
       <main className="container mx-auto px-6 py-12 flex-1 flex items-center justify-center">
         <div className="max-w-2xl w-full">

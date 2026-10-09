@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ComingSoonBadge } from "../components/ComingSoonBadge";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Provider recruitment landing page.
@@ -134,41 +135,7 @@ export function ProvidersLanding() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-2 md:px-4 py-4">
-          <div className="flex items-center justify-between">
-            <img
-              src={logo}
-              alt="Starkwell"
-              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/")}
-                className="text-gray-700 hover:text-blue-600"
-              >
-                For Patients
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/provider-login")}
-                className="text-gray-700 hover:text-blue-600"
-              >
-                Practice log in
-              </Button>
-              <Button
-                onClick={() => navigate("/provider-signup")}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Join Now
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader ctaTo="/provider-signup" ctaLabel="Join Now" />
 
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-blue-600 via-blue-700 to-cyan-600 text-white py-20">
@@ -202,6 +169,12 @@ export function ProvidersLanding() {
                 Learn How It Works
               </Button>
             </div>
+            <p className="mt-5 text-blue-100">
+              Already have an account?{" "}
+              <button type="button" onClick={() => navigate("/provider-login")} className="font-semibold text-white underline underline-offset-4 hover:text-blue-50">
+                Log in
+              </button>
+            </p>
           </div>
         </div>
       </section>

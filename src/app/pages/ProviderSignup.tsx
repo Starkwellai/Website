@@ -8,11 +8,11 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { Building2, ArrowRight, AlertCircle } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import { LegalDocumentModal } from "../components/LegalDocumentModal";
 import { TermsContent } from "../components/legal/TermsContent";
 import { PrivacyContent } from "../components/legal/PrivacyContent";
 import { getCurrentProviderAccount, signupProviderAccount } from "../../lib/starkwell";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Real account creation: this submits to POST /api/provider-signup and gets
@@ -130,16 +130,7 @@ export function ProviderSignup() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex flex-col">
-      <header className="bg-white border-b border-blue-100">
-        <div className="container mx-auto px-2 md:px-4 py-4">
-          <img
-            src={logo}
-            alt="Starkwell"
-            className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-            onClick={() => navigate("/")}
-          />
-        </div>
-      </header>
+      <SiteHeader minimal />
 
       <main className="container mx-auto px-6 py-12 flex-1">
         <div className="max-w-2xl mx-auto">

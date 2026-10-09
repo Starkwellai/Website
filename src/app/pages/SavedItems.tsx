@@ -3,12 +3,11 @@ import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Bookmark, ExternalLink, MapPin, Search, X } from "lucide-react";
-import { SiteNav } from "../components/SiteNav";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 import {
   getSavedServices, getSavedFacilities, removeSavedService, removeSavedFacility,
   type SavedService, type SavedFacility,
 } from "../../lib/savedItems";
+import { SiteHeader } from "../components/SiteHeader";
 
 /**
  * Everything on this page comes from the visitor's own browser storage, not
@@ -40,19 +39,7 @@ export function SavedItems() {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="relative bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-2">
-          <div className="flex items-center justify-between">
-            <img
-              src={logo}
-              alt="Starkwell"
-              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <SiteNav />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="bg-[#0f1f3d] text-white py-16">
         <div className="container mx-auto px-6">

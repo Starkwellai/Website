@@ -3,7 +3,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { ArrowLeft, Lock } from "lucide-react";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "../components/SiteHeader";
 
 export function PrivacyPolicy() {
   const navigate = useNavigate();
@@ -11,22 +11,7 @@ export function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       {/* Header */}
-      <header className="bg-white border-b border-blue-100">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <img
-              src={logo}
-              alt="Starkwell"
-              className="h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <Button variant="outline" onClick={() => navigate(-1)}>
-              <ArrowLeft className="size-4 mr-2" />
-              Back
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="container mx-auto px-6 py-12">
         <div className="max-w-4xl mx-auto">

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
-import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
+import { SiteHeader } from "../components/SiteHeader";
 
 export function NotFound() {
   const navigate = useNavigate();
@@ -8,24 +8,7 @@ export function NotFound() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <img 
-              src={logo} 
-              alt="Starkwell" 
-              className="h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <Button 
-              onClick={() => navigate("/")}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Go Home
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* 404 Content */}
       <div className="flex-1 flex items-center justify-center px-6">
