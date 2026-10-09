@@ -10,7 +10,7 @@ import { Input } from "../components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Search, MapPin, Stethoscope, Eye, Smile, Scissors, Heart, Syringe, Activity, Clock, Award, ArrowRight, CheckCircle, DollarSign, FileText, Sparkles } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
-import { SiteNav } from "../components/SiteNav";
+import { SiteHeader } from "../components/SiteHeader";
 import { ComingSoonBadge } from "../components/ComingSoonBadge";
 import logo from "../../assets/b2725744d7bb552f20e2a7bcebca16e19b4a014d.png";
 
@@ -95,67 +95,58 @@ export function Home() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="relative bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-2">
-          <div className="flex items-center justify-between">
-            <img 
-              src={logo} 
-              alt="Starkwell" 
-              className="h-9 md:h-12 cursor-pointer rounded-[5px]"
-              onClick={() => navigate("/")}
-            />
-            <SiteNav />
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero Section with Badge and CTAs */}
-      <section className="bg-gradient-to-b from-blue-50 to-white py-16 md:py-24">
-        <div className="container mx-auto px-6">
+      {/* Sized so that on a phone everything from the badge down to "List Your Practice"
+          fits on the first screen with no scrolling: tighter spacing, a smaller headline,
+          a compact two-row search box and side-by-side buttons. From md up it is the
+          original layout. */}
+      <section className="bg-gradient-to-b from-blue-50 to-white py-4 md:py-24">
+        <div className="container mx-auto px-4 md:px-6">
           <div className="max-w-4xl mx-auto text-center">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold mb-6">
-              <CheckCircle className="size-4" />
+            <div className="inline-flex items-center gap-1.5 md:gap-2 bg-blue-100 text-blue-700 px-3 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-3 md:mb-6">
+              <CheckCircle className="size-3.5 md:size-4" />
               Utah's first transparent healthcare marketplace
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+            <h1 className="text-[clamp(1.35rem,6.2vw,1.8rem)] leading-tight md:text-6xl font-bold text-gray-900 mb-2 md:mb-6">
               Find care. Compare prices.<br />
               <span className="text-[#2563eb]">Know before you go.</span>
             </h1>
-            <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+            <p className="text-sm leading-snug md:text-xl md:leading-normal text-gray-600 mb-3 md:mb-10 max-w-2xl mx-auto">
               Stop overpaying for care you couldn't compare. Starkwell shows you the real prices Utah providers have agreed to with insurers — so you can choose confidently before you call.
             </p>
 
             {/* Search Bar */}
-            <Card className="shadow-xl border-gray-200 max-w-3xl mx-auto mb-3">
-              <CardContent className="p-2 rounded-[5px] bg-[#cbcbcb]">
-                <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-2">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
+            <Card className="shadow-xl border-gray-200 max-w-3xl mx-auto mb-2 md:mb-3">
+              <CardContent className="p-1.5 md:p-2 [&:last-child]:pb-1.5 md:[&:last-child]:pb-2 rounded-[5px] bg-[#cbcbcb]">
+                <form onSubmit={handleSearch} className="grid grid-cols-[1fr_auto] md:flex md:flex-row gap-1.5 md:gap-2">
+                  <div className="col-span-2 md:flex-1 relative">
+                    <Search className="absolute left-2.5 md:left-4 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-500" />
                     <Input
                       type="text"
                       placeholder="Condition, procedure, or doctor name"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-12 h-14 border-0 focus-visible:ring-0 text-base"
+                      className="pl-8 md:pl-12 h-9 md:h-14 border-0 focus-visible:ring-0 text-sm md:text-base"
                     />
                   </div>
-                  <div className="flex-1 relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-500" />
+                  <div className="md:flex-1 relative">
+                    <MapPin className="absolute left-2.5 md:left-4 top-1/2 -translate-y-1/2 size-4 md:size-5 text-gray-500" />
                     <Input
                       type="text"
-                      placeholder="City, state, or zip code"
+                      placeholder="City or zip code"
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      className="pl-12 h-14 border-0 focus-visible:ring-0 text-base"
+                      className="pl-8 md:pl-12 h-9 md:h-14 border-0 focus-visible:ring-0 text-sm md:text-base"
                     />
                   </div>
-                  <Button 
+                  <Button
                     type="submit"
                     size="lg"
-                    className="bg-blue-600 hover:bg-blue-700 h-14 px-8 text-base"
+                    className="bg-blue-600 hover:bg-blue-700 h-9 md:h-14 px-4 md:px-8 text-sm md:text-base"
                   >
                     Search
                   </Button>
@@ -174,47 +165,47 @@ export function Home() {
                 751 qualifying procedures (was 620), median ratio 2.6x (was
                 2.7x) — the catalog grew to cover far more high-variance
                 specialty procedures, which widened the typical gap. */}
-            <p className="text-sm text-teal-600 mb-8">
+            <p className="hidden md:block text-sm text-teal-600 mb-8">
               {spread
                 ? <>✦ A knee MRI is {formatPrice(spread.lo.median_price)} at one Utah hospital and {formatPrice(spread.hi.median_price)} at another — see what yours costs</>
                 : <>✦ The same procedure can cost very different amounts at different Utah locations — see what yours costs</>}
             </p>
 
             {/* Trust Indicators */}
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600 mb-8">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="size-5 text-blue-600" />
-                <span>Federal NPI Check</span>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 md:flex md:flex-wrap md:items-center md:justify-center md:gap-6 text-xs md:text-sm text-gray-600 mb-3 md:mb-8">
+              <div className="flex items-center justify-center gap-1.5 md:gap-2">
+                <CheckCircle className="size-4 md:size-5 text-blue-600 shrink-0" />
+                <span>Matched to NPI registry</span>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="size-5 text-blue-600" />
+              <div className="flex items-center justify-center gap-1.5 md:gap-2">
+                <CheckCircle className="size-4 md:size-5 text-blue-600 shrink-0" />
                 <span>Published Rates</span>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="size-5 text-blue-600" />
+              <div className="flex items-center justify-center gap-1.5 md:gap-2">
+                <CheckCircle className="size-4 md:size-5 text-blue-600 shrink-0" />
                 <span>No Data Sold, Ever</span>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="size-5 text-blue-600" />
+              <div className="flex items-center justify-center gap-1.5 md:gap-2">
+                <CheckCircle className="size-4 md:size-5 text-blue-600 shrink-0" />
                 <span>No insurance needed</span>
               </div>
             </div>
 
             {/* Two CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button 
+            <div className="flex flex-row items-center justify-center gap-2 md:gap-4">
+              <Button
                 size="lg"
                 onClick={() => navigate("/prices")}
-                className="bg-blue-600 hover:bg-blue-700 text-lg px-8"
+                className="flex-1 md:flex-none h-10 md:h-auto bg-blue-600 hover:bg-blue-700 text-sm md:text-lg px-3 md:px-8"
               >
                 Compare Prices
-                <ArrowRight className="ml-2 size-5" />
+                <ArrowRight className="ml-1.5 md:ml-2 size-4 md:size-5" />
               </Button>
-              <Button 
+              <Button
                 size="lg"
                 variant="outline"
-                onClick={() => navigate("/signup-provider")}
-                className="border-2 border-blue-600 text-blue-600 hover:bg-blue-50 text-lg px-8"
+                onClick={() => navigate("/providers")}
+                className="flex-1 md:flex-none h-10 md:h-auto border-2 border-blue-600 text-blue-600 hover:bg-blue-50 text-sm md:text-lg px-3 md:px-8"
               >
                 List Your Practice
               </Button>

@@ -22,7 +22,7 @@ interface NavLink {
 }
 
 const LINKS: NavLink[] = [
-  { label: "For Providers" },
+  { label: "For Providers", to: "/providers" },
   { label: "Compare Prices", to: "/prices" },
   { label: "Hospital Stays", to: "/hospital-stays" },
   { label: "Saved", to: "/saved" },
@@ -36,10 +36,14 @@ interface Props {
   /** Route for the primary call to action. */
   ctaTo?: string;
   ctaLabel?: string;
+  /** "light" = the original look for a white bar; "brand" = white text for the blue/teal header. */
+  tone?: "light" | "brand";
 }
 
 export function SiteNav({ ctaTo = "/signup-consumer",
-                          ctaLabel = "Accounts: Coming Soon" }: Props) {
+                          ctaLabel = "Accounts: Coming Soon",
+                          tone = "light" }: Props) {
+  const brand = tone === "brand";
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -48,7 +52,7 @@ export function SiteNav({ ctaTo = "/signup-consumer",
   // desktop layout.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const onResize = () => { if (window.innerWidth >= 768) setOpen(false); };
+    const onResize = () => { if (window.innerWidth >= 1024) setOpen(false); };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     return () => {
@@ -65,18 +69,19 @@ export function SiteNav({ ctaTo = "/signup-consumer",
   return (
     <>
       {/* Desktop */}
-      <div className="hidden md:flex items-center gap-6">
+      <div className={`hidden lg:flex items-center ${brand ? "gap-1" : "gap-6"}`}>
         {LINKS.map(l => (
           <Button
             key={l.label}
             variant="ghost"
-            className="text-gray-700 hover:text-blue-600"
+            className={brand ? "text-white/95 hover:text-white hover:bg-white/15" : "text-gray-700 hover:text-blue-600"}
             onClick={() => go(l.to)}
           >
             {l.label}
           </Button>
         ))}
-        <Button onClick={() => go(ctaTo)} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={() => go(ctaTo)}
+                className={brand ? "ml-2 bg-white text-blue-700 hover:bg-blue-50 font-semibold" : "bg-blue-600 hover:bg-blue-700"}>
           {ctaLabel}
         </Button>
       </div>
@@ -84,7 +89,8 @@ export function SiteNav({ ctaTo = "/signup-consumer",
       {/* Mobile trigger */}
       <button
         type="button"
-        className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className={`lg:hidden inline-flex items-center justify-center rounded-md p-2 focus:outline-none focus-visible:ring-2 ${
+          brand ? "text-white hover:bg-white/15 focus-visible:ring-white" : "text-gray-700 hover:bg-gray-100 focus-visible:ring-blue-500"}`}
         aria-expanded={open}
         aria-controls="site-nav-mobile"
         aria-label={open ? "Close menu" : "Open menu"}
@@ -99,7 +105,7 @@ export function SiteNav({ ctaTo = "/signup-consumer",
       {open && (
         <div
           id="site-nav-mobile"
-          className="md:hidden absolute left-0 right-0 top-full border-t border-gray-100 bg-white shadow-lg"
+          className="lg:hidden absolute left-0 right-0 top-full border-t border-gray-100 bg-white shadow-lg"
         >
           <nav className="container mx-auto px-6 py-2 flex flex-col">
             {LINKS.map(l => (
