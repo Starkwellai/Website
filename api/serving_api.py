@@ -1675,6 +1675,53 @@ def _append_jsonl(path: Path, data: dict) -> None:
             f.write(json.dumps(data) + "\n")
     except OSError:
         pass
+    _maybe_prune_usage_logs()
+
+
+# The privacy policy promises usage records are kept 12 months. Pruning runs at
+# most once a day, piggybacking on a write (no scheduler to keep alive). The first
+# write after each start always prunes, since _last_prune starts at 0.
+LOG_RETENTION_DAYS = 365
+_last_prune = 0.0
+
+
+def prune_jsonl(path: Path, keep_after_iso: str) -> int:
+    """Drop lines whose "ts" is older than keep_after_iso. ISO-8601 UTC strings
+    sort lexically, so no parsing is needed. Lines without a readable ts are
+    kept (never delete what we can't read). Returns how many were removed."""
+    if not path.exists():
+        return 0
+    kept, dropped = [], 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            try:
+                ts = json.loads(line).get("ts", "")
+            except ValueError:
+                ts = ""
+            if ts and ts < keep_after_iso:
+                dropped += 1
+            else:
+                kept.append(line)
+    if dropped:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+        os.replace(tmp, path)
+    return dropped
+
+
+def _maybe_prune_usage_logs(force: bool = False) -> None:
+    global _last_prune
+    now = time.time()
+    if not force and now - _last_prune < 86400:
+        return
+    _last_prune = now
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=LOG_RETENTION_DAYS)).isoformat()
+    for p in (SEARCH_ACTIVITY_LOG, PAGE_VIEW_LOG):
+        try:
+            prune_jsonl(p, cutoff)
+        except OSError:
+            pass
 
 
 def _log_search_activity(query: str, result_count: int) -> None:
@@ -2025,11 +2072,13 @@ def ai_search(body: AISearchBody, request: Request):
             if block.type == "tool_use" and block.name == "match_services":
                 raw_keys = list(block.input.get("service_keys", []))
                 break
-        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} "
+        # No IP in the log line: the privacy policy says we don't store visitor
+        # IP addresses (the limiter above only holds them in memory).
+        print(f"[ai-search] query_len={len(body.query)} "
               f"raw_matches={len(raw_keys)} "
               f"usage={getattr(resp, 'usage', None)}")
     except Exception as e:  # noqa: BLE001 — any failure here must fail soft
-        print(f"[ai-search] ip={client_ip} query_len={len(body.query)} error={type(e).__name__}")
+        print(f"[ai-search] query_len={len(body.query)} error={type(e).__name__}")
         return {"query": body.query, "enabled": True, "matched_keys": [], "results": [],
                 "error": "ai_unavailable"}
 

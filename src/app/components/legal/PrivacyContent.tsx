@@ -6,60 +6,66 @@ export function PrivacyContent() {
         <p className="mb-3">
           Starkwell ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our healthcare marketplace and navigation platform.
         </p>
-        <p>
+        <p className="mb-3">
           This Privacy Policy applies to all information collected through our Service and any related services, sales, marketing, or events (collectively, the "Services").
+        </p>
+        <p>
+          We have written this policy to describe what the site does today. Where a feature is not live yet, we say so, and we will update this policy before that feature launches.
         </p>
       </section>
 
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">2. Information We Collect</h2>
         <p className="mb-3">
-          We collect information that you provide directly to us, information we obtain automatically when you use our Services, and information from third-party sources.
+          Most of what Starkwell shows is public information: prices that insurers publish, public provider registries, and public drug-price lists. You can use the price search without an account and without giving us your name.
         </p>
-        
-        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.1 Personal Information You Provide</h3>
+
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.1 What you give us</h3>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Name, email address, phone number, and mailing address</li>
-          <li>Account credentials (username and password)</li>
-          <li>Payment and billing information</li>
-          <li>Health insurance information</li>
-          <li>Medical history and health-related information you choose to share</li>
-          <li>Appointment booking details and preferences</li>
-          <li>Communications with us, including customer support inquiries</li>
+          <li><strong>Searches:</strong> the words you type into search. If a search finds nothing and you choose to describe your situation instead, the description you type.</li>
+          <li><strong>Clinic accounts:</strong> practice name, contact name, email address, phone number, NPI number, specialty, city, state, and any message you send with your request. Your password is stored only as a salted, one-way hash, never in readable form.</li>
+          <li><strong>Clinic listing details:</strong> the phone number, website, hours, insurance note, and review replies a clinic chooses to publish.</li>
+          <li><strong>Reviews:</strong> the rating, comment, and optional name you submit.</li>
+          <li><strong>Messages to us:</strong> anything you send when you contact us.</li>
         </ul>
 
-        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.2 Information Collected Automatically</h3>
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.2 What we record automatically</h3>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Device information (IP address, browser type, operating system)</li>
-          <li>Usage data (pages viewed, features used, time spent on the Service)</li>
-          <li>Location data (with your consent)</li>
-          <li>Cookies and similar tracking technologies</li>
+          <li><strong>Page visits:</strong> the date and time and the page address (for example, "/prices"), so we can count how many times the site is opened. Visits by automated crawlers are left out.</li>
+          <li><strong>Search records:</strong> the date and time, the words searched, and how many results came back, so we can see what people look for and which searches fail. These records are not linked to your name, account, or device.</li>
+        </ul>
+        <p className="mb-3">
+          We do <strong>not</strong> record IP addresses, device or browser details, precise location, or advertising identifiers in our own records. Our server sees your IP address while it handles each request, and briefly holds it in memory to limit abuse (for example, to stop one source from sending thousands of requests), but does not save it. Our hosting provider may keep its own network-level records under its own policies.
+        </p>
+
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.3 Public data sources</h3>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>Insurers' published negotiated-rate files</li>
+          <li>The federal NPI provider registry and the NUCC taxonomy</li>
+          <li>Federal and public drug-price lists</li>
+          <li>Hospital price files and Medicare reference data</li>
         </ul>
 
-        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.3 Information from Third Parties</h3>
-        <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Healthcare providers you interact with through our platform</li>
-          <li>Insurance companies (with your authorization)</li>
-          <li>Third-party authentication services</li>
-          <li>Public databases and data aggregators</li>
-        </ul>
+        <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">2.4 Not collected today</h3>
+        <p className="mb-3">
+          We do not currently collect payment or billing information, health insurance member details, medical history, patient accounts, or appointment details, and appointment requests are turned off. These are planned. Before any of them launch, we will update this policy and our HIPAA Notice and tell you what we collect and why. Please do not type your name, medical history, or other personal details into the search box.
+        </p>
       </section>
 
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">3. How We Use Your Information</h2>
         <p className="mb-3">
-          We use the information we collect for various purposes, including:
+          We use the information we collect to:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Providing, maintaining, and improving our Services</li>
-          <li>Processing and completing transactions, including appointment bookings</li>
-          <li>Sending you technical notices, updates, security alerts, and support messages</li>
-          <li>Responding to your comments, questions, and requests</li>
-          <li>Providing personalized healthcare recommendations and price comparisons</li>
-          <li>Using AI to translate medical information into plain language</li>
-          <li>Monitoring and analyzing trends, usage, and activities</li>
-          <li>Detecting, preventing, and addressing technical issues and fraud</li>
-          <li>Complying with legal obligations and enforcing our Terms and Conditions</li>
+          <li>Provide, maintain, and improve the price search and the rest of the Services</li>
+          <li>Understand what people search for, and improve results for searches that find nothing</li>
+          <li>Count visits to the site</li>
+          <li>Match a plain-language description to our list of procedures, when you choose to use that option (see 4.2)</li>
+          <li>Set up, verify, and run clinic accounts, claims, and reviews</li>
+          <li>Respond to your comments, questions, and requests, and send you security notices</li>
+          <li>Detect, prevent, and address technical issues, abuse, and fraud</li>
+          <li>Comply with legal obligations and enforce our Terms and Conditions</li>
         </ul>
       </section>
 
@@ -68,23 +74,23 @@ export function PrivacyContent() {
         <p className="mb-3">
           We may share your information in the following circumstances:
         </p>
-        
+
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">4.1 With Your Consent</h3>
         <p className="mb-3">
-          We share your information with healthcare providers when you book appointments or request services through our platform.
+          If we turn on appointment requests, we will share only what you submit with the clinic you choose to contact. Appointment requests are currently turned off.
         </p>
 
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">4.2 Service Providers</h3>
         <p className="mb-3">
-          We share information with third-party vendors, consultants, and service providers who perform services on our behalf, such as:
+          We share information with the companies that help us run the site:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
-          <li>Payment processors</li>
-          <li>Cloud hosting providers</li>
-          <li>Analytics providers</li>
-          <li>Customer support services</li>
-          <li>AI and machine learning service providers</li>
+          <li><strong>Cloud hosting provider:</strong> our servers run on DigitalOcean, which stores the data described in this policy on our behalf.</li>
+          <li><strong>AI service provider:</strong> only when a search finds nothing and you choose "describe it instead," the text you typed is sent to an AI service operated by Anthropic so it can match your description to a procedure in our list. We send that text and nothing else about you, and only the matches from our own list are shown back to you. Anthropic handles the text under its own terms and privacy policy.</li>
         </ul>
+        <p className="mb-3">
+          We do not use advertising networks or analytics vendors. If we add service providers such as payment processors or customer support tools, we will list them here first.
+        </p>
 
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">4.3 Legal Requirements</h3>
         <p className="mb-3">
@@ -126,7 +132,7 @@ export function PrivacyContent() {
         <p className="mb-3">
           Depending on your location, you may have certain rights regarding your personal information:
         </p>
-        
+
         <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">6.1 Access and Portability</h3>
         <p className="mb-3">
           You have the right to request access to the personal information we hold about you and to receive a copy of that information in a portable format.
@@ -154,19 +160,18 @@ export function PrivacyContent() {
       </section>
 
       <section>
-        <h2 className="text-xl font-semibold text-blue-900 mb-3">7. Cookies and Tracking Technologies</h2>
+        <h2 className="text-xl font-semibold text-blue-900 mb-3">7. Cookies and Information Stored in Your Browser</h2>
         <p className="mb-3">
-          We use cookies and similar tracking technologies to collect and track information about your use of our Services. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent.
-        </p>
-        <p>
-          Types of cookies we use include:
+          We do not use advertising or analytics cookies, and we do not use third-party trackers. The site stores a few items in your own browser, only to make features work:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-3 mt-2">
-          <li><strong>Essential cookies:</strong> Necessary for the Service to function</li>
-          <li><strong>Analytics cookies:</strong> Help us understand how users interact with the Service</li>
-          <li><strong>Preference cookies:</strong> Remember your settings and preferences</li>
-          <li><strong>Marketing cookies:</strong> Deliver relevant advertisements (with your consent)</li>
+          <li><strong>Saved items:</strong> the procedures and facilities you save are kept in your browser on your device, not on our servers.</li>
+          <li><strong>Clinic sign-in:</strong> if you log in to a clinic account, a sign-in token is kept in your browser until you log out or it expires.</li>
+          <li><strong>Interface setting:</strong> a small cookie may remember whether a side menu is open.</li>
         </ul>
+        <p>
+          You can clear this information at any time in your browser settings. Doing so will remove your saved items and sign you out.
+        </p>
       </section>
 
       <section>
@@ -205,8 +210,14 @@ export function PrivacyContent() {
 
       <section>
         <h2 className="text-xl font-semibold text-blue-900 mb-3">12. Data Retention</h2>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li><strong>Page-visit and search records:</strong> kept for 12 months, then deleted automatically.</li>
+          <li><strong>Clinic accounts and listings:</strong> kept while the account is active. You can ask us to delete an account and its listings at any time.</li>
+          <li><strong>Reviews:</strong> kept until removed under our review rules or at the author's request.</li>
+          <li><strong>Backups:</strong> nightly backups are kept for 14 days and then overwritten, so deleted information can remain in a backup for up to 14 days.</li>
+        </ul>
         <p>
-          We retain your personal information for as long as necessary to provide our Services, comply with legal obligations, resolve disputes, and enforce our agreements. When we no longer need your information, we will securely delete or anonymize it.
+          When we no longer need other information, we will securely delete or anonymize it.
         </p>
       </section>
 
