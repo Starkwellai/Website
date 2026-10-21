@@ -240,7 +240,6 @@ export function PrivacyContent() {
           <p>Starkwell Privacy Department</p>
           <p>Email: privacy@starkwell.com</p>
           <p>Address: Salt Lake City, Utah</p>
-          <p>Phone: (555) 123-4567</p>
         </div>
       </section>
     </div>
