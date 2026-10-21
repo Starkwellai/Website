@@ -86,6 +86,11 @@ ssh -i ~/.ssh/starkwell_deploy root@<DROPLET_IP> \
 
 Then run `deploy/swap.sh` (below) over SSH to actually put the new image live.
 
+**Shortcut for code-only changes:** `bash deploy/deploy.sh` from the repo root does
+all of the above (package the code, copy, build, swap) and probes the live site once a
+second while it switches. It prints `SWAP EXIT CODE: 0` on success. It does not resend
+the data files.
+
 **Why a separate swap step, not just `docker rm -f` then `docker run`**: that
 straight-line sequence has a real failure mode — found the hard way on
 2026-09-16, when a redeploy's `docker run` failed (`--env-file` pointed at a
